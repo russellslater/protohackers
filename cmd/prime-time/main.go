@@ -34,23 +34,36 @@ func handle(conn net.Conn) error {
 
 		log.Println("received:", string(line))
 
-		var req primeRequest
-		if err := json.Unmarshal([]byte(line), &req); err != nil || !isValidPrimeRequest(req) {
-			_, err = conn.Write([]byte("invalid request\n"))
-			return err
-		}
-
-		resBytes, err := json.Marshal(primeResponse{Method: "isPrime", Prime: isPrime(*req.Number)})
+		resBytes, valid, err := handleLine(line)
 		if err != nil {
 			return err
 		}
 
-		if _, err = conn.Write([]byte(append(resBytes, []byte("\n")...))); err != nil {
+		if _, err := conn.Write(resBytes); err != nil {
 			return err
+		}
+
+		// stop processing if the request was invalid
+		if !valid {
+			break
 		}
 	}
 
 	return nil
+}
+
+func handleLine(line []byte) ([]byte, bool, error) {
+	var req primeRequest
+	if err := json.Unmarshal(line, &req); err != nil || !isValidPrimeRequest(req) {
+		return []byte("invalid request\n"), false, nil
+	}
+
+	resBytes, err := json.Marshal(primeResponse{Method: "isPrime", Prime: isPrime(*req.Number)})
+	if err != nil {
+		return nil, true, err
+	}
+
+	return append(resBytes, []byte("\n")...), true, nil
 }
 
 func isValidPrimeRequest(req primeRequest) bool {
