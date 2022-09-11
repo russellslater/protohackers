@@ -12,8 +12,8 @@ import (
 )
 
 type primeRequest struct {
-	Method string  `json:"method"`
-	Number float64 `json:"number"`
+	Method string   `json:"method"`
+	Number *float64 `json:"number"`
 }
 
 type primeResponse struct {
@@ -35,12 +35,12 @@ func handle(conn net.Conn) error {
 		log.Println("received:", string(line))
 
 		var req primeRequest
-		if err := json.Unmarshal([]byte(line), &req); err != nil {
+		if err := json.Unmarshal([]byte(line), &req); err != nil || !isValidPrimeRequest(req) {
 			_, err = conn.Write([]byte("invalid request\n"))
 			return err
 		}
 
-		resBytes, err := json.Marshal(primeResponse{Method: "isPrime", Prime: isPrime(req.Number)})
+		resBytes, err := json.Marshal(primeResponse{Method: "isPrime", Prime: isPrime(*req.Number)})
 		if err != nil {
 			return err
 		}
@@ -51,6 +51,10 @@ func handle(conn net.Conn) error {
 	}
 
 	return nil
+}
+
+func isValidPrimeRequest(req primeRequest) bool {
+	return req.Method == "isPrime" && req.Number != nil
 }
 
 func isPrime(n float64) bool {
