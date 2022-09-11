@@ -2,13 +2,14 @@ package main
 
 import (
 	"io"
+	"log"
 	"net"
 
 	"github.com/russellslater/protohackers"
 )
 
 func main() {
-	protohackers.ListenAndAccept(5000, echo)
+	log.Fatal(protohackers.ListenAndAccept(5000, echo))
 }
 
 func echo(conn net.Conn) error {
