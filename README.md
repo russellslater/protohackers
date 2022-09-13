@@ -4,6 +4,7 @@ A collection of my solutions for the server programming challenge at https://pro
 
 - Smoke Test: https://protohackers.com/problem/0
 - Prime Time: https://protohackers.com/problem/1
+- Means to an End: https://protohackers.com/problem/2
 
 ## Instructions
 Building a solution's Docker image (`smoke-test` in this example) and testing locally ...
@@ -30,4 +31,9 @@ For submission at https://protohackers.com, find the public IP address of your f
 Tail logs with ...
 ```
 flyctl logs --app [APP_NAME]
+```
+## Testing Means to an End
+The VS Code [Hex Editor](https://marketplace.visualstudio.com/items?itemName=ms-vscode.hexeditor) extension might useful. Sending binary data might then look like `cat data.dat | nc localhost 5000` or the following (by converting a hexdump into binary) ...
+```
+echo '490000303900000065490000303a00000066' | xxd -r -p | nc localhost 5000
 ```
