@@ -1,0 +1,12 @@
+# syntax=docker/dockerfile:1
+
+FROM golang:1.19
+
+WORKDIR /app
+
+COPY . ./
+RUN go mod download
+
+RUN go build -o /means-to-an-end ./cmd/means-to-an-end
+
+CMD [ "/means-to-an-end" ]
