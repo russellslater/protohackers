@@ -13,7 +13,10 @@ func TestPrimeTimeHandler(t *testing.T) {
 
 	client, server := net.Pipe()
 
-	go handle(server)
+	go func() {
+		handle(server)
+		server.Close()
+	}()
 
 	clientScanner := bufio.NewScanner(client)
 
@@ -31,7 +34,9 @@ func TestPrimeTimeHandler(t *testing.T) {
 
 	client.Write([]byte("{\"method\":\"isPrime\",\"number\":7}\n"))
 	clientScanner.Scan()
-	is.Equal(len(clientScanner.Text()), 0) // should be disconnected
+	is.Equal(len(clientScanner.Text()), 0) // server hung up after invalid request
+
+	client.Close()
 }
 
 func TestValidLines(t *testing.T) {
