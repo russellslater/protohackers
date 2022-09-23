@@ -1,8 +1,38 @@
 package main
 
 import (
+	"bufio"
+	"net"
 	"testing"
+
+	"github.com/matryer/is"
 )
+
+func TestPrimeTimeHandler(t *testing.T) {
+	is := is.New(t)
+
+	client, server := net.Pipe()
+
+	go handle(server)
+
+	clientScanner := bufio.NewScanner(client)
+
+	client.Write([]byte("{\"method\":\"isPrime\",\"number\":1}\n"))
+	clientScanner.Scan()
+	is.Equal(clientScanner.Text(), "{\"method\":\"isPrime\",\"prime\":false}")
+
+	client.Write([]byte("{\"method\":\"isPrime\",\"number\":7}\n"))
+	clientScanner.Scan()
+	is.Equal(clientScanner.Text(), "{\"method\":\"isPrime\",\"prime\":true}")
+
+	client.Write([]byte("{\"method\":\"isPrime\",\"number\":ABC}\n"))
+	clientScanner.Scan()
+	is.Equal(clientScanner.Text(), "invalid request")
+
+	client.Write([]byte("{\"method\":\"isPrime\",\"number\":7}\n"))
+	clientScanner.Scan()
+	is.Equal(len(clientScanner.Text()), 0) // should be disconnected
+}
 
 func TestValidLines(t *testing.T) {
 	tt := []struct {
