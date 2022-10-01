@@ -5,6 +5,7 @@ A collection of my solutions for the server programming challenge at https://pro
 - Smoke Test: https://protohackers.com/problem/0
 - Prime Time: https://protohackers.com/problem/1
 - Means to an End: https://protohackers.com/problem/2
+- Budget Chat: https://protohackers.com/problem/3
 
 ## Instructions
 Building a solution's Docker image (`smoke-test` in this example) and testing locally ...
