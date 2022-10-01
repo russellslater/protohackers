@@ -38,7 +38,7 @@ func (s *ChatServer) Start() error {
 		return fmt.Errorf("listen: %w", err)
 	}
 
-	fmt.Println("listening on port", s.port)
+	log.Println("listening on port", s.port)
 
 	for {
 		conn, err := s.listener.Accept()
@@ -56,6 +56,12 @@ func (s *ChatServer) Start() error {
 	}
 }
 
+func (s *ChatServer) Close() {
+	if err := s.listener.Close(); err != nil {
+		fmt.Print("error closing connection: %w", err)
+	}
+}
+
 func (s *ChatServer) connect(conn net.Conn) *client {
 	client := &client{
 		addr: conn.RemoteAddr().String(),
@@ -64,7 +70,7 @@ func (s *ChatServer) connect(conn net.Conn) *client {
 
 	s.clients = append(s.clients, client)
 
-	fmt.Printf("connection from %s [# connected clients: %d]\n", client.addr, len(s.clients))
+	log.Printf("connection from %s [# connected clients: %d]\n", client.addr, len(s.clients))
 
 	return client
 }
@@ -78,15 +84,21 @@ func (s *ChatServer) remove(client *client) {
 		}
 	}
 
-	fmt.Printf("connection from %s closed\n", client.addr)
+	if client.name != "" {
+		s.broadcast(client, fmt.Sprintf("* %s has left the room\n", client.name))
+	}
+
+	log.Printf("connection from %s closed [# connected clients: %d]\n", client.addr, len(s.clients))
 
 	client.conn.Close()
 }
 
-func (c *ChatServer) serve(client *client) error {
-	defer c.remove(client)
+func (s *ChatServer) serve(client *client) error {
+	defer s.remove(client)
 
-	client.conn.Write([]byte("Welcome to budgetchat! What shall I call you?\n"))
+	if _, err := client.conn.Write([]byte("Welcome to budgetchat! What shall I call you?\n")); err != nil {
+		return fmt.Errorf("welcome: %w", err)
+	}
 
 	scanner := bufio.NewScanner(client.conn)
 	for scanner.Scan() {
@@ -95,10 +107,24 @@ func (c *ChatServer) serve(client *client) error {
 		log.Println("received:", line)
 
 		if client.name == "" {
-			if c.validateClientName(line) {
+			if s.validateClientName(line) {
 				client.name = line
+
+				if err := s.broadcast(client, fmt.Sprintf("* %s has entered the room\n", client.name)); err != nil {
+					return fmt.Errorf("broadcast: %w", err)
+				}
+
+				roomMsg := fmt.Sprintf("* The room contains: %s\n", s.userNamesPresent(client))
+
+				if _, err := client.conn.Write([]byte(roomMsg)); err != nil {
+					return fmt.Errorf("room: %w", err)
+				}
 			} else {
 				return fmt.Errorf("invalid client name: %s", line)
+			}
+		} else {
+			if err := s.broadcast(client, fmt.Sprintf("[%s]: %s\n", client.name, line)); err != nil {
+				return fmt.Errorf("broadcast: %w", err)
 			}
 		}
 	}
@@ -106,7 +132,7 @@ func (c *ChatServer) serve(client *client) error {
 	return scanner.Err()
 }
 
-func (c *ChatServer) validateClientName(name string) bool {
+func (s *ChatServer) validateClientName(name string) bool {
 	// must contain at least one character
 	if len(name) < 1 {
 		return false
@@ -120,7 +146,7 @@ func (c *ChatServer) validateClientName(name string) bool {
 	}
 
 	// must be a unique name
-	for _, client := range c.clients {
+	for _, client := range s.clients {
 		if name == client.name {
 			return false
 		}
@@ -129,8 +155,30 @@ func (c *ChatServer) validateClientName(name string) bool {
 	return true
 }
 
-func (s *ChatServer) Close() {
-	if err := s.listener.Close(); err != nil {
-		fmt.Print("error closing connection: %w", err)
+func (s *ChatServer) userNamesPresent(client *client) string {
+	var names []string
+	for _, c := range s.clients {
+		// do not include self or unnamed clients
+		if client == c || c.name == "" {
+			continue
+		}
+		names = append(names, c.name)
 	}
+
+	return strings.Join(names, ", ")
+}
+
+func (s *ChatServer) broadcast(client *client, msg string) error {
+	for _, c := range s.clients {
+		// do not send to self or unnamed clients
+		if client == c || c.name == "" {
+			continue
+		}
+
+		if _, err := c.conn.Write([]byte(msg)); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
