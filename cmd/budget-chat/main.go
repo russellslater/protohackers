@@ -33,7 +33,7 @@ func NewChatServer(port int) *ChatServer {
 
 func (s *ChatServer) Start() error {
 	var err error
-	s.listener, err = net.Listen("tcp", fmt.Sprintf("localhost:%d", s.port))
+	s.listener, err = net.Listen("tcp", fmt.Sprintf(":%d", s.port))
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
