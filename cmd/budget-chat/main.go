@@ -107,29 +107,39 @@ func (s *ChatServer) serve(client *client) error {
 		log.Println("received:", line)
 
 		if client.name == "" {
-			if s.validateClientName(line) {
-				client.name = line
-
-				if err := s.broadcast(client, fmt.Sprintf("* %s has entered the room\n", client.name)); err != nil {
-					return fmt.Errorf("broadcast: %w", err)
-				}
-
-				roomMsg := fmt.Sprintf("* The room contains: %s\n", s.userNamesPresent(client))
-
-				if _, err := client.conn.Write([]byte(roomMsg)); err != nil {
-					return fmt.Errorf("room: %w", err)
-				}
-			} else {
-				return fmt.Errorf("invalid client name: %s", line)
+			if err := s.nameClient(client, line); err != nil {
+				return err
 			}
 		} else {
-			if err := s.broadcast(client, fmt.Sprintf("[%s]: %s\n", client.name, line)); err != nil {
+			if err := s.broadcast(client, fmt.Sprintf("[%s] %s\n", client.name, line)); err != nil {
 				return fmt.Errorf("broadcast: %w", err)
 			}
 		}
 	}
 
 	return scanner.Err()
+}
+
+func (s *ChatServer) nameClient(client *client, name string) error {
+	if s.validateClientName(name) {
+		client.name = name
+
+		if err := s.broadcast(client, fmt.Sprintf("* %s has entered the room\n", client.name)); err != nil {
+			return fmt.Errorf("broadcast: %w", err)
+		}
+
+		roomMsg := fmt.Sprintf("* The room contains: %s\n", s.userNamesPresent(client))
+
+		if _, err := client.conn.Write([]byte(roomMsg)); err != nil {
+			return fmt.Errorf("room: %w", err)
+		}
+	} else {
+		invalidNameMsg := fmt.Sprintf("invalid name: %s\n", name)
+		client.conn.Write([]byte(invalidNameMsg))
+		return fmt.Errorf(invalidNameMsg)
+	}
+
+	return nil
 }
 
 func (s *ChatServer) validateClientName(name string) bool {
