@@ -42,6 +42,8 @@ func (m *messageExpecter) waitAssert(msgAssertions []messageAssertion) {
 }
 
 func TestBudgetChatScenario(t *testing.T) {
+	t.Parallel()
+
 	s := NewChatServer(5000)
 
 	aliceClientConn, aliceServerConn := net.Pipe()
@@ -147,4 +149,87 @@ func TestBudgetChatScenario(t *testing.T) {
 
 	// Chieko leaves
 	chiekoClientConn.Close()
+}
+
+func TestNameValidation(t *testing.T) {
+	tt := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{name: "Alice", input: "Alice", expected: "* The room contains: "},
+		{name: "Bob", input: "Bob", expected: "* The room contains: "},
+		{name: "Chieko", input: "Chieko", expected: "* The room contains: "},
+		{name: "All Numbers", input: "0123456789", expected: "* The room contains: "},
+		{name: "Non-Alphanumeric Character", input: "Alice!", expected: "invalid name: Alice!"},
+		{name: "Empty String", input: "", expected: "invalid name: "},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			m := newMessageExpecter(t)
+
+			s := NewChatServer(5000)
+
+			clientConn, serverConn := net.Pipe()
+
+			client := s.connect(serverConn)
+
+			go func() {
+				s.serve(client)
+			}()
+
+			clientScanner := bufio.NewScanner(clientConn)
+
+			m.assert(clientScanner, "Welcome to budgetchat! What shall I call you?")
+
+			clientConn.Write([]byte(tc.input + "\n"))
+
+			m.assert(clientScanner, tc.expected)
+
+			clientConn.Close()
+		})
+	}
+}
+
+func TestDuplicateName(t *testing.T) {
+	t.Parallel()
+	m := newMessageExpecter(t)
+
+	s := NewChatServer(5000)
+
+	uniqueClientConn, uniqueServerConn := net.Pipe()
+	dupeClientConn, dupeServerConn := net.Pipe()
+
+	uniqueClient := s.connect(uniqueServerConn)
+	dupeClient := s.connect(dupeServerConn)
+
+	go func() {
+		s.serve(uniqueClient)
+	}()
+
+	go func() {
+		s.serve(dupeClient)
+	}()
+
+	uniqueClientScanner := bufio.NewScanner(uniqueClientConn)
+	client2Scanner := bufio.NewScanner(dupeClientConn)
+
+	m.assert(uniqueClientScanner, "Welcome to budgetchat! What shall I call you?")
+
+	uniqueClientConn.Write([]byte("Uniquename\n"))
+
+	m.assert(uniqueClientScanner, "* The room contains: ")
+
+	m.assert(client2Scanner, "Welcome to budgetchat! What shall I call you?")
+
+	// Duplicate name!
+	dupeClientConn.Write([]byte("Uniquename\n"))
+
+	m.assert(client2Scanner, "invalid name: Uniquename")
+
+	uniqueClientConn.Close()
+	dupeClientConn.Close()
 }
