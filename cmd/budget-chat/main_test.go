@@ -41,30 +41,25 @@ func (m *messageExpecter) waitAssert(msgAssertions []messageAssertion) {
 	wg.Wait()
 }
 
+func startTestServer(conns ...net.Conn) {
+	s := NewChatServer(5000)
+
+	for _, conn := range conns {
+		client := s.connect(conn)
+		go func() {
+			s.serve(client)
+		}()
+	}
+}
+
 func TestBudgetChatScenario(t *testing.T) {
 	t.Parallel()
-
-	s := NewChatServer(5000)
 
 	aliceClientConn, aliceServerConn := net.Pipe()
 	bobClientConn, bobServerConn := net.Pipe()
 	chiekoClientConn, chiekoServerConn := net.Pipe()
 
-	aliceClient := s.connect(aliceServerConn)
-	bobClient := s.connect(bobServerConn)
-	chiekoClient := s.connect(chiekoServerConn)
-
-	go func() {
-		s.serve(aliceClient)
-	}()
-
-	go func() {
-		s.serve(bobClient)
-	}()
-
-	go func() {
-		s.serve(chiekoClient)
-	}()
+	startTestServer(aliceServerConn, bobServerConn, chiekoServerConn)
 
 	aliceClientScanner := bufio.NewScanner(aliceClientConn)
 	bobClientScanner := bufio.NewScanner(bobClientConn)
@@ -171,15 +166,9 @@ func TestNameValidation(t *testing.T) {
 			t.Parallel()
 			m := newMessageExpecter(t)
 
-			s := NewChatServer(5000)
-
 			clientConn, serverConn := net.Pipe()
 
-			client := s.connect(serverConn)
-
-			go func() {
-				s.serve(client)
-			}()
+			startTestServer(serverConn)
 
 			clientScanner := bufio.NewScanner(clientConn)
 
@@ -198,21 +187,10 @@ func TestDuplicateName(t *testing.T) {
 	t.Parallel()
 	m := newMessageExpecter(t)
 
-	s := NewChatServer(5000)
-
 	uniqueClientConn, uniqueServerConn := net.Pipe()
 	dupeClientConn, dupeServerConn := net.Pipe()
 
-	uniqueClient := s.connect(uniqueServerConn)
-	dupeClient := s.connect(dupeServerConn)
-
-	go func() {
-		s.serve(uniqueClient)
-	}()
-
-	go func() {
-		s.serve(dupeClient)
-	}()
+	startTestServer(uniqueServerConn, dupeServerConn)
 
 	uniqueClientScanner := bufio.NewScanner(uniqueClientConn)
 	client2Scanner := bufio.NewScanner(dupeClientConn)
