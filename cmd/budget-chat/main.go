@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"sync"
 )
 
 func main() {
@@ -17,6 +18,7 @@ type ChatServer struct {
 	port     int
 	clients  []*client
 	listener net.Listener
+	sync.Mutex
 }
 
 type client struct {
@@ -68,7 +70,9 @@ func (s *ChatServer) connect(conn net.Conn) *client {
 		conn: conn,
 	}
 
+	s.Lock()
 	s.clients = append(s.clients, client)
+	s.Unlock()
 
 	log.Printf("connection from %s [# connected clients: %d]\n", client.addr, len(s.clients))
 
@@ -76,6 +80,7 @@ func (s *ChatServer) connect(conn net.Conn) *client {
 }
 
 func (s *ChatServer) remove(client *client) {
+	s.Lock()
 	for i, c := range s.clients {
 		if client == c {
 			s.clients[i] = s.clients[len(s.clients)-1]
@@ -83,6 +88,7 @@ func (s *ChatServer) remove(client *client) {
 			break
 		}
 	}
+	s.Unlock()
 
 	if client.name != "" {
 		s.broadcast(client, fmt.Sprintf("* %s has left the room\n", client.name))
@@ -166,6 +172,9 @@ func (s *ChatServer) validateClientName(name string) bool {
 }
 
 func (s *ChatServer) userNamesPresent(client *client) string {
+	s.Lock()
+	defer s.Unlock()
+
 	var names []string
 	for _, c := range s.clients {
 		// do not include self or unnamed clients
@@ -179,6 +188,9 @@ func (s *ChatServer) userNamesPresent(client *client) string {
 }
 
 func (s *ChatServer) broadcast(client *client, msg string) error {
+	s.Lock()
+	defer s.Unlock()
+
 	for _, c := range s.clients {
 		// do not send to self or unnamed clients
 		if client == c || c.name == "" {
