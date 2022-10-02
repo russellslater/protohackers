@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"net"
+	"sync"
 	"testing"
 
 	"github.com/matryer/is"
@@ -19,6 +20,25 @@ func newMessageExpecter(t *testing.T) *messageExpecter {
 func (m *messageExpecter) assert(scn *bufio.Scanner, expected string) {
 	scn.Scan()
 	m.is.Equal(scn.Text(), expected)
+}
+
+type messageAssertion struct {
+	scanner  *bufio.Scanner
+	expected string
+}
+
+func (m *messageExpecter) waitAssert(msgAssertions []messageAssertion) {
+	var wg sync.WaitGroup
+	wg.Add(len(msgAssertions))
+
+	for _, msgAssertion := range msgAssertions {
+		go func(msgAssertion messageAssertion) {
+			defer wg.Done()
+			m.assert(msgAssertion.scanner, msgAssertion.expected)
+		}(msgAssertion)
+	}
+
+	wg.Wait()
 }
 
 func TestBudgetChatScenario(t *testing.T) {
@@ -62,49 +82,69 @@ func TestBudgetChatScenario(t *testing.T) {
 
 	bobClientConn.Write([]byte("Bob\n"))
 
-	m.assert(aliceClientScanner, "* Bob has entered the room")
-	m.assert(bobClientScanner, "* The room contains: Alice")
+	m.waitAssert([]messageAssertion{
+		{scanner: bobClientScanner, expected: "* The room contains: Alice"},
+		{scanner: aliceClientScanner, expected: "* Bob has entered the room"},
+	})
 
 	// Chieko joins the chat
 	m.assert(chiekoClientScanner, "Welcome to budgetchat! What shall I call you?")
 
 	chiekoClientConn.Write([]byte("Chieko\n"))
 
-	m.assert(aliceClientScanner, "* Chieko has entered the room")
-	m.assert(bobClientScanner, "* Chieko has entered the room")
-	m.assert(chiekoClientScanner, "* The room contains: Alice, Bob")
+	m.waitAssert([]messageAssertion{
+		{scanner: chiekoClientScanner, expected: "* The room contains: Alice, Bob"},
+		{scanner: aliceClientScanner, expected: "* Chieko has entered the room"},
+		{scanner: bobClientScanner, expected: "* Chieko has entered the room"},
+	})
 
 	// Bob talks
 	bobClientConn.Write([]byte("Hey, Alice!\n"))
 
-	m.assert(aliceClientScanner, "[Bob] Hey, Alice!")
-	m.assert(chiekoClientScanner, "[Bob] Hey, Alice!")
+	m.waitAssert([]messageAssertion{
+		{scanner: aliceClientScanner, expected: "[Bob] Hey, Alice!"},
+		{scanner: chiekoClientScanner, expected: "[Bob] Hey, Alice!"},
+	})
 
 	// Alice talks
 	aliceClientConn.Write([]byte("Bob, is that you?\n"))
 
-	m.assert(bobClientScanner, "[Alice] Bob, is that you?")
-	m.assert(chiekoClientScanner, "[Alice] Bob, is that you?")
+	m.waitAssert([]messageAssertion{
+		{scanner: bobClientScanner, expected: "[Alice] Bob, is that you?"},
+		{scanner: chiekoClientScanner, expected: "[Alice] Bob, is that you?"},
+	})
 
 	// Alice talks again
 	aliceClientConn.Write([]byte("Talk to me, Bob!\n"))
 
-	m.assert(bobClientScanner, "[Alice] Talk to me, Bob!")
-	m.assert(chiekoClientScanner, "[Alice] Talk to me, Bob!")
+	m.waitAssert([]messageAssertion{
+		{scanner: bobClientScanner, expected: "[Alice] Talk to me, Bob!"},
+		{scanner: chiekoClientScanner, expected: "[Alice] Talk to me, Bob!"},
+	})
 
 	// Chieko talks
 	chiekoClientConn.Write([]byte("Alice, wait! I'll talk to you!\n"))
 
-	m.assert(aliceClientScanner, "[Chieko] Alice, wait! I'll talk to you!")
-	m.assert(bobClientScanner, "[Chieko] Alice, wait! I'll talk to you!")
+	m.waitAssert([]messageAssertion{
+		{scanner: aliceClientScanner, expected: "[Chieko] Alice, wait! I'll talk to you!"},
+		{scanner: bobClientScanner, expected: "[Chieko] Alice, wait! I'll talk to you!"},
+	})
 
 	// Alice leaves
 	aliceClientConn.Close()
 
-	m.assert(chiekoClientScanner, "* Alice has left the room")
-	m.assert(bobClientScanner, "* Alice has left the room")
+	m.waitAssert([]messageAssertion{
+		{scanner: chiekoClientScanner, expected: "* Alice has left the room"},
+		{scanner: bobClientScanner, expected: "* Alice has left the room"},
+	})
 
-	// Bob leaves, Chieko leaves
+	// Bob leaves
 	bobClientConn.Close()
+
+	m.waitAssert([]messageAssertion{
+		{scanner: chiekoClientScanner, expected: "* Bob has left the room"},
+	})
+
+	// Chieko leaves
 	chiekoClientConn.Close()
 }
