@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -18,10 +19,11 @@ func main() {
 		os.Exit(exitCode)
 	}()
 
-	// Required for fly.io
-	// net.ParseIP("fly-global-services")
+	var address string
+	flag.StringVar(&address, "address", "0.0.0.0", "IP address for server to bind to")
+	flag.Parse()
 
-	s := NewUnusualDatabaseServer(5000, net.ParseIP("127.0.0.1"))
+	s := NewUnusualDatabaseServer(5000, net.ParseIP(address))
 	defer s.Close()
 
 	err := s.Start()
