@@ -6,6 +6,7 @@ A collection of my solutions for the server programming challenge at https://pro
 - Prime Time: https://protohackers.com/problem/1
 - Means to an End: https://protohackers.com/problem/2
 - Budget Chat: https://protohackers.com/problem/3
+- Unusual Database Program: https://protohackers.com/problem/4
 
 ## Instructions
 Building a solution's Docker image (`smoke-test` in this example) and testing locally ...
