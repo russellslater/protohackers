@@ -48,17 +48,17 @@ func NewUnusualDatabaseServer(port int, ip net.IP) *UnusualDatabaseServer {
 }
 
 func (s *UnusualDatabaseServer) Start() error {
-	addr := net.UDPAddr{
+	addr := &net.UDPAddr{
 		IP:   s.ip,
 		Port: s.port,
 	}
 
-	conn, err := net.ListenUDP("udp", &addr)
+	conn, err := net.ListenUDP("udp", addr)
 	if err != nil {
 		return fmt.Errorf("can't listen on %d/udp: %s", addr.Port, err)
 	}
 
-	log.Println("listening on port", addr.Port)
+	log.Printf("listening on %v", addr)
 
 	s.conn = conn
 	s.handleUDP()
@@ -73,23 +73,27 @@ func (s *UnusualDatabaseServer) Close() {
 func (s *UnusualDatabaseServer) handleUDP() {
 	buf := make([]byte, 1000)
 	for {
-		n, _, err := s.conn.ReadFromUDP(buf)
+		n, addr, err := s.conn.ReadFromUDP(buf)
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) {
 				return
 			}
 
-			log.Printf("error reading over UDP: %s", err)
+			log.Printf("error reading over UDP from %v: %s", addr, err)
 			continue
 		}
 
-		log.Printf("received %d bytes over UDP: %s", n, buf[:n])
+		log.Printf("received %d bytes over UDP from %v: %s", n, addr, buf[:n])
 
-		s.handleCommand(string(bytes.Trim(buf[:n], "\x00")))
+		response, send := s.handleCommand(string(bytes.Trim(buf[:n], "\x00")))
+		if send {
+			log.Printf("sending %d bytes over UDP to %v: %s", len(response), addr, response)
+			s.conn.WriteToUDP([]byte(response), addr)
+		}
 	}
 }
 
-func (s *UnusualDatabaseServer) handleCommand(cmd string) {
+func (s *UnusualDatabaseServer) handleCommand(cmd string) (string, bool) {
 	eqIndex := strings.Index(cmd, "=")
 	if eqIndex != -1 {
 		key := cmd[:eqIndex]
@@ -98,5 +102,10 @@ func (s *UnusualDatabaseServer) handleCommand(cmd string) {
 		log.Printf("setting key %q to %q", key, value)
 
 		s.db.Set(key, value)
+
+		return "", false
+	} else {
+		value, _ := s.db.Get(cmd)
+		return fmt.Sprintf("%s=%s", cmd, value), true
 	}
 }
