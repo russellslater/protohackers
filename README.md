@@ -38,3 +38,14 @@ The VS Code [Hex Editor](https://marketplace.visualstudio.com/items?itemName=ms-
 ```
 echo '490000303900000065490000303a00000066' | xxd -r -p | nc localhost 5000
 ```
+
+## Testing Unusual Database Program
+To run the Docker image locally, override the `-host` flag (it defaults to a value required by fly.io otherwise) ...
+```
+docker run -p 5000:5000/udp unusual-database-program -host=0.0.0.0
+```
+You can now test UDP with Netcat using the `-u` flag ...
+```
+nc -u localhost 5000
+```
+Note that `^D` / `CTRL+D` will send `EOF`.

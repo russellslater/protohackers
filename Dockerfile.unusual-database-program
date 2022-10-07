@@ -9,4 +9,5 @@ RUN go mod download
 
 RUN go build -o /unusual-database-program ./cmd/unusual-database-program
 
-ENTRYPOINT [ "/unusual-database-program", "-host=fly-global-services" ]
+ENTRYPOINT [ "/unusual-database-program" ]
+CMD [ "-host=fly-global-services" ]
