@@ -37,7 +37,7 @@ func main() {
 type UnusualDatabaseServer struct {
 	port int
 	host string
-	conn net.PacketConn
+	conn *net.UDPConn
 	db   *db.UnusualDatabase
 }
 
@@ -50,7 +50,12 @@ func NewUnusualDatabaseServer(port int, host string) *UnusualDatabaseServer {
 }
 
 func (s *UnusualDatabaseServer) Start() error {
-	conn, err := net.ListenPacket("udp", fmt.Sprintf("%s:%d", s.host, s.port))
+	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", s.host, s.port))
+	if err != nil {
+		return fmt.Errorf("failed to resolve UDP address %s:%d: %s", s.host, s.port, err)
+	}
+	net.ListenPacket()
+	conn, err := net.ListenUDP("udp", addr)
 	if err != nil {
 		return fmt.Errorf("can't listen on %d/udp: %s", s.port, err)
 	}
@@ -70,7 +75,7 @@ func (s *UnusualDatabaseServer) Close() {
 func (s *UnusualDatabaseServer) handleUDP() {
 	buf := make([]byte, 1000)
 	for {
-		n, addr, err := s.conn.ReadFrom(buf)
+		n, addr, err := s.conn.ReadFromUDP(buf)
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) {
 				return
@@ -85,7 +90,7 @@ func (s *UnusualDatabaseServer) handleUDP() {
 		response, send := s.handleCommand(string(bytes.Trim(buf[:n], "\x00")))
 		if send {
 			log.Printf("sending %d bytes over UDP to %v: %s", len(response), addr, response)
-			s.conn.WriteTo([]byte(response), addr)
+			s.conn.WriteToUDP([]byte(response), addr)
 		}
 	}
 }
