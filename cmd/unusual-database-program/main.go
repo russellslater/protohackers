@@ -19,11 +19,11 @@ func main() {
 		os.Exit(exitCode)
 	}()
 
-	var address string
-	flag.StringVar(&address, "address", "0.0.0.0", "IP address for server to bind to")
+	var host string
+	flag.StringVar(&host, "host", "0.0.0.0", "Host address for server to bind to")
 	flag.Parse()
 
-	s := NewUnusualDatabaseServer(5000, net.ParseIP(address))
+	s := NewUnusualDatabaseServer(5000, host)
 	defer s.Close()
 
 	err := s.Start()
@@ -36,31 +36,26 @@ func main() {
 
 type UnusualDatabaseServer struct {
 	port int
-	ip   net.IP
-	conn *net.UDPConn
+	host string
+	conn net.PacketConn
 	db   *db.UnusualDatabase
 }
 
-func NewUnusualDatabaseServer(port int, ip net.IP) *UnusualDatabaseServer {
+func NewUnusualDatabaseServer(port int, host string) *UnusualDatabaseServer {
 	return &UnusualDatabaseServer{
 		port: port,
-		ip:   ip,
+		host: host,
 		db:   db.NewUnusualDatabase(),
 	}
 }
 
 func (s *UnusualDatabaseServer) Start() error {
-	addr := &net.UDPAddr{
-		IP:   s.ip,
-		Port: s.port,
-	}
-
-	conn, err := net.ListenUDP("udp", addr)
+	conn, err := net.ListenPacket("udp", fmt.Sprintf("%s:%d", s.host, s.port))
 	if err != nil {
-		return fmt.Errorf("can't listen on %d/udp: %s", addr.Port, err)
+		return fmt.Errorf("can't listen on %d/udp: %s", s.port, err)
 	}
 
-	log.Printf("listening on %v", addr)
+	log.Printf("listening on %v", conn.LocalAddr())
 
 	s.conn = conn
 	s.handleUDP()
@@ -75,7 +70,7 @@ func (s *UnusualDatabaseServer) Close() {
 func (s *UnusualDatabaseServer) handleUDP() {
 	buf := make([]byte, 1000)
 	for {
-		n, addr, err := s.conn.ReadFromUDP(buf)
+		n, addr, err := s.conn.ReadFrom(buf)
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) {
 				return
@@ -90,7 +85,7 @@ func (s *UnusualDatabaseServer) handleUDP() {
 		response, send := s.handleCommand(string(bytes.Trim(buf[:n], "\x00")))
 		if send {
 			log.Printf("sending %d bytes over UDP to %v: %s", len(response), addr, response)
-			s.conn.WriteToUDP([]byte(response), addr)
+			s.conn.WriteTo([]byte(response), addr)
 		}
 	}
 }
