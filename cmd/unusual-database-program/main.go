@@ -8,7 +8,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"strings"
 
 	"github.com/russellslater/protohackers/internal/db"
 )
@@ -54,7 +53,7 @@ func (s *UnusualDatabaseServer) Start() error {
 	if err != nil {
 		return fmt.Errorf("failed to resolve UDP address %s:%d: %s", s.host, s.port, err)
 	}
-	net.ListenPacket()
+
 	conn, err := net.ListenUDP("udp", addr)
 	if err != nil {
 		return fmt.Errorf("can't listen on %d/udp: %s", s.port, err)
@@ -87,27 +86,11 @@ func (s *UnusualDatabaseServer) handleUDP() {
 
 		log.Printf("received %d bytes over UDP from %v: %s", n, addr, buf[:n])
 
-		response, send := s.handleCommand(string(bytes.Trim(buf[:n], "\x00")))
-		if send {
-			log.Printf("sending %d bytes over UDP to %v: %s", len(response), addr, response)
-			s.conn.WriteToUDP([]byte(response), addr)
+		result := NewDbCommand(s.db, string(bytes.Trim(buf[:n], "\x00"))).execute()
+
+		if result != "" {
+			log.Printf("sending %d bytes over UDP to %v: %s", len(result), addr, result)
+			s.conn.WriteToUDP([]byte(result), addr)
 		}
-	}
-}
-
-func (s *UnusualDatabaseServer) handleCommand(cmd string) (string, bool) {
-	eqIndex := strings.Index(cmd, "=")
-	if eqIndex != -1 {
-		key := cmd[:eqIndex]
-		value := cmd[eqIndex+1:]
-
-		log.Printf("setting key %q to %q", key, value)
-
-		s.db.Set(key, value)
-
-		return "", false
-	} else {
-		value, _ := s.db.Get(cmd)
-		return fmt.Sprintf("%s=%s", cmd, value), true
 	}
 }
