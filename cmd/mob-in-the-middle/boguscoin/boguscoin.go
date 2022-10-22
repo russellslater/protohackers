@@ -9,8 +9,8 @@ const (
 	// it consists of at least 26, and at most 35, alphanumeric characters
 	// it starts at the start of a chat message, or is preceded by a space
 	// it ends at the end of a chat message, or is followed by a space
-	boguscoinAddr    = "7YWHMfk9JZe0LM0g1ZauHuiSxhI"
 	boguscoinPattern = "(?:^|(?<= ))7[\\w]{25,34}(?:$|(?= ))"
+	boguscoinAddr    = "7YWHMfk9JZe0LM0g1ZauHuiSxhI"
 )
 
 type BoguscoinAddrRewriter struct {

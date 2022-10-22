@@ -7,8 +7,6 @@ import (
 	"github.com/russellslater/protohackers/cmd/mob-in-the-middle/boguscoin"
 )
 
-// Hi alice, please send payment to 7iKDZEwPZSqIvDnHvVN2r0hUWXD5rHX
-
 func TestContainsBoguscoinAddr(t *testing.T) {
 	t.Parallel()
 
