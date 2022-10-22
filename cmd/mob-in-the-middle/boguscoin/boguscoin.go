@@ -30,3 +30,7 @@ func NewBoguscoinAddrRewriterWithAddr(targetAddr string) *BoguscoinAddrRewriter 
 func (b *BoguscoinAddrRewriter) Rewrite(src string) string {
 	return b.regex.ReplaceAllLiteralString(src, b.targetAddr)
 }
+
+func (b *BoguscoinAddrRewriter) RewriteBytes(src []byte) []byte {
+	return b.regex.ReplaceAllLiteral(src, []byte(b.targetAddr))
+}

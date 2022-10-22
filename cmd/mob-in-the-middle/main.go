@@ -5,12 +5,22 @@ import (
 	"fmt"
 	"log"
 	"net"
+
+	"github.com/russellslater/protohackers/cmd/mob-in-the-middle/boguscoin"
 )
 
-const protohackersAddr = "chat.protohackers.com:16963"
+const (
+	protohackersChatSvrAddr = "chat.protohackers.com:16963"
+)
+
+type Rewriter interface {
+	Rewrite(string) string
+	RewriteBytes([]byte) []byte
+}
 
 func main() {
-	proxySrv := NewChatProxy(5000, protohackersAddr)
+	proxySrv := NewChatProxy(5000, protohackersChatSvrAddr)
+	proxySrv.rewriters = []Rewriter{boguscoin.NewBoguscoinAddrRewriter()}
 	log.Fatal(proxySrv.Start())
 }
 
@@ -18,6 +28,7 @@ type ChatProxy struct {
 	listenPort int
 	remoteAddr string
 	listener   net.Listener
+	rewriters  []Rewriter
 }
 
 func NewChatProxy(port int, remoteAddr string) *ChatProxy {
@@ -59,7 +70,7 @@ func (s *ChatProxy) Close() {
 func (s *ChatProxy) handle(client net.Conn) error {
 	defer client.Close()
 
-	upstream, err := net.Dial("tcp", "localhost:5000")
+	upstream, err := net.Dial("tcp", s.remoteAddr)
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)
 	}
@@ -86,6 +97,10 @@ func (s *ChatProxy) proxy(from net.Conn, to net.Conn) error {
 		scanned := scanner.Bytes()
 
 		log.Printf("received: %s", string(scanned))
+
+		for _, rw := range s.rewriters {
+			scanned = rw.RewriteBytes(scanned)
+		}
 
 		scanned = append(scanned, []byte("\n")...)
 
