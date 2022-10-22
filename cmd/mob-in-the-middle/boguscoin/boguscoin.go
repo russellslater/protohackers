@@ -1,6 +1,8 @@
 package boguscoin
 
-import "regexp"
+import (
+	"github.com/dlclark/regexp2"
+)
 
 const (
 	// it starts with a "7"
@@ -8,12 +10,12 @@ const (
 	// it starts at the start of a chat message, or is preceded by a space
 	// it ends at the end of a chat message, or is followed by a space
 	boguscoinAddr    = "7YWHMfk9JZe0LM0g1ZauHuiSxhI"
-	boguscoinPattern = "(?:^|\\b)7[\\w]{25,34}(?:$|\\b)"
+	boguscoinPattern = "(?:^|(?<= ))7[\\w]{25,34}(?:$|(?= ))"
 )
 
 type BoguscoinAddrRewriter struct {
 	targetAddr string
-	regex      *regexp.Regexp
+	regex      *regexp2.Regexp
 }
 
 func NewBoguscoinAddrRewriter() *BoguscoinAddrRewriter {
@@ -23,14 +25,15 @@ func NewBoguscoinAddrRewriter() *BoguscoinAddrRewriter {
 func NewBoguscoinAddrRewriterWithAddr(targetAddr string) *BoguscoinAddrRewriter {
 	return &BoguscoinAddrRewriter{
 		targetAddr: targetAddr,
-		regex:      regexp.MustCompile(boguscoinPattern),
+		regex:      regexp2.MustCompile(boguscoinPattern, 0),
 	}
 }
 
 func (b *BoguscoinAddrRewriter) Rewrite(src string) string {
-	return b.regex.ReplaceAllLiteralString(src, b.targetAddr)
+	str, _ := b.regex.Replace(src, b.targetAddr, -1, -1)
+	return str
 }
 
 func (b *BoguscoinAddrRewriter) RewriteBytes(src []byte) []byte {
-	return b.regex.ReplaceAllLiteral(src, []byte(b.targetAddr))
+	return []byte(b.Rewrite(string(src)))
 }

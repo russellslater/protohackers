@@ -72,6 +72,12 @@ func TestContainsBoguscoinAddr(t *testing.T) {
 			targetAddr: "7YWHMfk9JZe0LM0g1ZauHuiSxhI",
 			want:       "k56w5f5uif2ww13ai22xmpcfc7or3z 7YWHMfk9JZe0LM0g1ZauHuiSxhI 7YWHMfk9JZe0LM0g1ZauHuiSxhI 9mobune4wuaqgotihpsmxoqnnnb88f",
 		},
+		{
+			name:       "Avoids replacing what looks like a valid Boguscoin address",
+			str:        "This is a product ID, not a Boguscoin: 7xjqDhQY1qGvnjQfYEC4IsAkfM-th0fsxQo78NPzmt96yMzhFKijzmOR-1234",
+			targetAddr: "7YWHMfk9JZe0LM0g1ZauHuiSxhI",
+			want:       "This is a product ID, not a Boguscoin: 7xjqDhQY1qGvnjQfYEC4IsAkfM-th0fsxQo78NPzmt96yMzhFKijzmOR-1234",
+		},
 	}
 
 	for _, tc := range tt {
