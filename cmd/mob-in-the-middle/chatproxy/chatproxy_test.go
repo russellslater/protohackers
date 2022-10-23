@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -85,6 +86,64 @@ func TestChatProxy(t *testing.T) {
 
 	if n, err := conn.Read(got); err == nil {
 		is.Equal(string(got[:n]), "AlphaBetaGamma\n") // response did not match
+	} else {
+		t.Errorf("could not read from connection: %v", err)
+	}
+}
+
+type testRewriter struct {
+	targetValue  string
+	rewriteValue string
+}
+
+func (s *testRewriter) Rewrite(src string) string {
+	return strings.ReplaceAll(src, s.targetValue, s.rewriteValue)
+}
+
+func (s *testRewriter) RewriteBytes(src []byte) []byte { return []byte(s.Rewrite(string(src))) }
+
+func TestChatProxyRewrite(t *testing.T) {
+	t.Parallel()
+	is := is.New(t)
+
+	port := 5002
+
+	proxySvr := startProxySvr(port)
+	defer proxySvr.Close()
+
+	// connect to proxy
+	conn, err := net.Dial("tcp", fmt.Sprintf(":%d", port))
+
+	if err != nil {
+		t.Errorf("could not connect to proxy server: %v", err)
+	}
+
+	defer conn.Close()
+
+	proxySvr.Rewriters = []chatproxy.Rewriter{
+		&testRewriter{targetValue: "Hello", rewriteValue: "Goodbye"},
+		&testRewriter{targetValue: "World", rewriteValue: "Banana"},
+	}
+
+	conn.Write([]byte("Hello, World!\n"))
+
+	got := make([]byte, 1000)
+
+	if n, err := conn.Read(got); err == nil {
+		is.Equal(string(got[:n]), "Goodbye, Banana!\n") // rewriters did not transform message
+	} else {
+		t.Errorf("could not read from connection: %v", err)
+	}
+
+	// switch out rewriters
+	proxySvr.Rewriters = []chatproxy.Rewriter{
+		&testRewriter{targetValue: "Three", rewriteValue: "One Hundred"},
+	}
+
+	conn.Write([]byte("Hello! One, Two, Three.\n"))
+
+	if n, err := conn.Read(got); err == nil {
+		is.Equal(string(got[:n]), "Hello! One, Two, One Hundred.\n") // rewriter did not transform message
 	} else {
 		t.Errorf("could not read from connection: %v", err)
 	}
