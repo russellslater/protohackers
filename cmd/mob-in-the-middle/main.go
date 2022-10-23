@@ -12,7 +12,7 @@ const (
 )
 
 func main() {
-	proxySrv := chatproxy.NewChatProxy(5000, protohackersChatSvrAddr)
-	proxySrv.Rewriters = []chatproxy.Rewriter{boguscoin.NewBoguscoinAddrRewriter()}
-	log.Fatal(proxySrv.Start())
+	proxySvr := chatproxy.NewChatProxy(5000, protohackersChatSvrAddr)
+	proxySvr.Rewriters = []chatproxy.Rewriter{boguscoin.NewBoguscoinAddrRewriter()}
+	log.Fatal(proxySvr.Start())
 }
