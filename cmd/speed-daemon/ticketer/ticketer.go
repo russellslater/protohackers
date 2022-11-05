@@ -1,6 +1,9 @@
 package ticketer
 
-import "math"
+import (
+	"fmt"
+	"math"
+)
 
 type Road struct {
 	ID    uint16
@@ -15,7 +18,11 @@ type Observation struct {
 }
 
 func (o *Observation) comparable(b *Observation) bool {
-	return (o.Road.ID == b.Road.ID) && (o.Plate == b.Plate)
+	return o.key() == b.key()
+}
+
+func (o *Observation) key() observationKey {
+	return observationKey{roadID: o.Road.ID, plate: o.Plate}
 }
 
 type observationKey struct {
@@ -36,6 +43,23 @@ type Ticket struct {
 	TimestampStart uint32
 	TimestampEnd   uint32
 	Speed          uint16 // 100x mile per hour
+}
+
+func (t *Ticket) String() string {
+	return fmt.Sprintf("{P: %s, R: %d, M0: %d, M1: %d, M0: %d, M1: %d, S: %d}",
+		t.Plate, t.Road, t.MileStart, t.MileEnd, t.TimestampStart, t.TimestampEnd, t.Speed)
+}
+
+func NewTicket(plate string, road uint16, mileStart uint16, mileEnd uint16, timestampStart uint32, timestampEnd uint32, speed uint16) *Ticket {
+	return &Ticket{
+		Plate:          plate,
+		Road:           road,
+		MileStart:      mileStart,
+		MileEnd:        mileEnd,
+		TimestampStart: timestampStart,
+		TimestampEnd:   timestampEnd,
+		Speed:          speed * 100,
+	}
 }
 
 type TicketManager struct {
@@ -59,7 +83,7 @@ func (t *TicketManager) Observe(o *Observation) bool {
 		return false
 	}
 
-	key := observationKey{roadID: o.Road.ID, plate: o.Plate}
+	key := o.key()
 
 	isMatch := false
 	if obs, ok := t.Observations[key]; ok {
@@ -69,6 +93,29 @@ func (t *TicketManager) Observe(o *Observation) bool {
 	t.Observations[key] = append(t.Observations[key], o)
 
 	return isMatch
+}
+
+func (t *TicketManager) DetectSpeedingInfractions(o *Observation) []*Ticket {
+	tickets := []*Ticket{}
+
+	if o != nil {
+		if obs, ok := t.Observations[o.key()]; ok {
+			for _, oOther := range obs {
+				speed, isSpeeding := t.DetectSpeeding(o, oOther)
+				if isSpeeding {
+					// order by mile (ascending)
+					o1, o2 := o, oOther
+					if o.Timestamp > oOther.Timestamp {
+						o1, o2 = oOther, o
+					}
+					ticket := NewTicket(o1.Plate, o1.Road.ID, o1.Mile, o2.Mile, o1.Timestamp, o2.Timestamp, speed)
+					tickets = append(tickets, ticket)
+				}
+			}
+		}
+	}
+
+	return tickets
 }
 
 func (t *TicketManager) CalculateSpeed(o1 *Observation, o2 *Observation) uint16 {
@@ -85,14 +132,9 @@ func (t *TicketManager) CalculateSpeed(o1 *Observation, o2 *Observation) uint16 
 	return uint16(speed)
 }
 
-func (t *TicketManager) DetectSpeeding(o1 *Observation, o2 *Observation) bool {
-	return t.comparable(o1, o2) && t.CalculateSpeed(o1, o2) > o1.Road.Limit
-}
-
-func (t *TicketManager) WriteTicket(o1 *Observation, o2 *Observation) *Ticket {
-	// TODO
-	// day boudaries - floor(timestamp / 86400)
-	return nil
+func (t *TicketManager) DetectSpeeding(o1 *Observation, o2 *Observation) (uint16, bool) {
+	speed := t.CalculateSpeed(o1, o2)
+	return speed, t.comparable(o1, o2) && speed > o1.Road.Limit
 }
 
 func (t *TicketManager) HasUnsentTicket(r *Road) *Ticket {

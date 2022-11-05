@@ -204,88 +204,102 @@ func TestCalculateSpeed(t *testing.T) {
 
 func TestDetectSpeeding(t *testing.T) {
 	tt := []struct {
-		name string
-		o1   *ticketer.Observation
-		o2   *ticketer.Observation
-		want bool
+		name         string
+		o1           *ticketer.Observation
+		o2           *ticketer.Observation
+		wantSpeed    uint16
+		wantSpeeding bool
 	}{
 		{
-			name: "Nil observations",
-			o1:   nil,
-			o2:   nil,
-			want: false,
+			name:         "Nil observations",
+			o1:           nil,
+			o2:           nil,
+			wantSpeed:    0,
+			wantSpeeding: false,
 		},
 		{
-			name: "First observation is nil",
-			o1:   nil,
-			o2:   &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 10, Plate: "HELLO", Timestamp: 1000000},
-			want: false,
+			name:         "First observation is nil",
+			o1:           nil,
+			o2:           &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 10, Plate: "HELLO", Timestamp: 1000000},
+			wantSpeed:    0,
+			wantSpeeding: false,
 		},
 		{
-			name: "Second observation is nil",
-			o1:   &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 10, Plate: "HELLO", Timestamp: 1000000},
-			o2:   nil,
-			want: false,
+			name:         "Second observation is nil",
+			o1:           &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 10, Plate: "HELLO", Timestamp: 1000000},
+			o2:           nil,
+			wantSpeed:    0,
+			wantSpeeding: false,
 		},
 		{
-			name: "Zero distance and time between observations for same plate-road",
-			o1:   &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 10, Plate: "HELLO", Timestamp: 1000000},
-			o2:   &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 10, Plate: "HELLO", Timestamp: 1000000},
-			want: false,
+			name:         "Zero distance and time between observations for same plate-road",
+			o1:           &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 10, Plate: "HELLO", Timestamp: 1000000},
+			o2:           &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 10, Plate: "HELLO", Timestamp: 1000000},
+			wantSpeed:    0,
+			wantSpeeding: false,
 		},
 		{
-			name: "Zero distance but some time between observations for same plate-road",
-			o1:   &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 10, Plate: "HELLO", Timestamp: 1000000},
-			o2:   &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 10, Plate: "HELLO", Timestamp: 1001000},
-			want: false,
+			name:         "Zero distance but some time between observations for same plate-road",
+			o1:           &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 10, Plate: "HELLO", Timestamp: 1000000},
+			o2:           &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 10, Plate: "HELLO", Timestamp: 1001000},
+			wantSpeed:    0,
+			wantSpeeding: false,
 		},
 		{
-			name: "Zero time but some distance between observations for same plate-road",
-			o1:   &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 10, Plate: "HELLO", Timestamp: 1000000},
-			o2:   &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 20, Plate: "HELLO", Timestamp: 1000000},
-			want: false,
+			name:         "Zero time but some distance between observations for same plate-road",
+			o1:           &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 10, Plate: "HELLO", Timestamp: 1000000},
+			o2:           &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 20, Plate: "HELLO", Timestamp: 1000000},
+			wantSpeed:    0,
+			wantSpeeding: false,
 		},
 		{
-			name: "Uncomparable observations - different plates, same road",
-			o1:   &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 10, Plate: "HELLO", Timestamp: 1000000},
-			o2:   &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 20, Plate: "WORLD", Timestamp: 1000000},
-			want: false,
+			name:         "Uncomparable observations - different plates, same road",
+			o1:           &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 10, Plate: "HELLO", Timestamp: 1000000},
+			o2:           &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 20, Plate: "WORLD", Timestamp: 1000000},
+			wantSpeed:    0,
+			wantSpeeding: false,
 		},
 		{
-			name: "Uncomparable observations - same plates, different road",
-			o1:   &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 10, Plate: "HELLO", Timestamp: 1000000},
-			o2:   &ticketer.Observation{Road: &ticketer.Road{2, 100}, Mile: 20, Plate: "HELLO", Timestamp: 1000000},
-			want: false,
+			name:         "Uncomparable observations - same plates, different road",
+			o1:           &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 10, Plate: "HELLO", Timestamp: 1000000},
+			o2:           &ticketer.Observation{Road: &ticketer.Road{2, 100}, Mile: 20, Plate: "HELLO", Timestamp: 1000000},
+			wantSpeed:    0,
+			wantSpeeding: false,
 		},
 		{
-			name: "Speed below 100 mph speed limit",
-			o1:   &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 10, Plate: "HELLO", Timestamp: 1000000},
-			o2:   &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 11, Plate: "HELLO", Timestamp: 1003600},
-			want: false,
+			name:         "Speed below 100 mph speed limit",
+			o1:           &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 10, Plate: "HELLO", Timestamp: 1000000},
+			o2:           &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 11, Plate: "HELLO", Timestamp: 1003600},
+			wantSpeed:    1,
+			wantSpeeding: false,
 		},
 		{
-			name: "Speed at 100 mph speed limit",
-			o1:   &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 0, Plate: "HELLO", Timestamp: 1000000},
-			o2:   &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 100, Plate: "HELLO", Timestamp: 1003600},
-			want: false,
+			name:         "Speed at 100 mph speed limit",
+			o1:           &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 0, Plate: "HELLO", Timestamp: 1000000},
+			o2:           &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 100, Plate: "HELLO", Timestamp: 1003600},
+			wantSpeed:    100,
+			wantSpeeding: false,
 		},
 		{
-			name: "Speed just above 100 mph speed limit",
-			o1:   &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 0, Plate: "HELLO", Timestamp: 1000000},
-			o2:   &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 100, Plate: "HELLO", Timestamp: 1003582},
-			want: true,
+			name:         "Speed just above 100 mph speed limit",
+			o1:           &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 0, Plate: "HELLO", Timestamp: 1000000},
+			o2:           &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 100, Plate: "HELLO", Timestamp: 1003582},
+			wantSpeed:    101,
+			wantSpeeding: true,
 		},
 		{
-			name: "Speed well above 100 mph speed limit",
-			o1:   &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 0, Plate: "HELLO", Timestamp: 1000000},
-			o2:   &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 10000, Plate: "HELLO", Timestamp: 1000001},
-			want: true,
+			name:         "Speed well above 100 mph speed limit",
+			o1:           &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 0, Plate: "HELLO", Timestamp: 1000000},
+			o2:           &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 10000, Plate: "HELLO", Timestamp: 1000001},
+			wantSpeed:    20736,
+			wantSpeeding: true,
 		},
 		{
-			name: "Going nowhere with a 0 mph speed limit",
-			o1:   &ticketer.Observation{Road: &ticketer.Road{1, 0}, Mile: 0, Plate: "HELLO", Timestamp: 1000000},
-			o2:   &ticketer.Observation{Road: &ticketer.Road{1, 0}, Mile: 0, Plate: "HELLO", Timestamp: 1000000},
-			want: false,
+			name:         "Going nowhere with a 0 mph speed limit",
+			o1:           &ticketer.Observation{Road: &ticketer.Road{1, 0}, Mile: 0, Plate: "HELLO", Timestamp: 1000000},
+			o2:           &ticketer.Observation{Road: &ticketer.Road{1, 0}, Mile: 0, Plate: "HELLO", Timestamp: 1000000},
+			wantSpeed:    0,
+			wantSpeeding: false,
 		},
 	}
 
@@ -296,8 +310,87 @@ func TestDetectSpeeding(t *testing.T) {
 
 			tm := ticketer.NewTicketManager()
 
-			got := tm.DetectSpeeding(tc.o1, tc.o2)
-			is.Equal(got, tc.want) // speed detection mismatch
+			gotSpeed, gotSpeeding := tm.DetectSpeeding(tc.o1, tc.o2)
+			is.Equal(gotSpeed, tc.wantSpeed)       // speed mismatch
+			is.Equal(gotSpeeding, tc.wantSpeeding) // speeding detection mismatch
+		})
+	}
+}
+
+func TestDetectSpeedingInfractions(t *testing.T) {
+	tt := []struct {
+		name              string
+		startObservations []*ticketer.Observation
+		observation       *ticketer.Observation
+		want              []*ticketer.Ticket
+	}{
+		// {
+		// 	name:              "Empty observations",
+		// 	startObservations: nil,
+		// 	observation:       nil,
+		// 	want:              []*ticketer.Ticket{},
+		// },
+		// {
+		// 	name:              "First observation",
+		// 	startObservations: nil,
+		// 	observation:       &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 0, Plate: "HELLO", Timestamp: 1000000},
+		// 	want:              []*ticketer.Ticket{},
+		// },
+		// {
+		// 	name: "First observation",
+		// 	startObservations: []*ticketer.Observation{
+		// 		{Road: &ticketer.Road{1, 100}, Mile: 0, Plate: "HELLO", Timestamp: 1000000},
+		// 	},
+		// 	observation: &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 100, Plate: "HELLO", Timestamp: 1003400},
+		// 	want: []*ticketer.Ticket{
+		// 		{
+		// 			Plate:          "HELLO",
+		// 			Road:           1,
+		// 			MileStart:      0,
+		// 			MileEnd:        100,
+		// 			TimestampStart: 1000000,
+		// 			TimestampEnd:   1003400,
+		// 			Speed:          10600,
+		// 		},
+		// 	},
+		// },
+		{
+			name: "Ticket per infraction",
+			startObservations: []*ticketer.Observation{
+				{Road: &ticketer.Road{1, 100}, Mile: 0, Plate: "HELLO", Timestamp: 1000000},
+				{Road: &ticketer.Road{1, 100}, Mile: 0, Plate: "HELLO", Timestamp: 1000000},
+			},
+			observation: &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 100, Plate: "HELLO", Timestamp: 1003400},
+			want: []*ticketer.Ticket{
+				{Plate: "HELLO", Road: 1, MileStart: 0, MileEnd: 100, TimestampStart: 1000000, TimestampEnd: 1003400, Speed: 10600},
+				{Plate: "HELLO", Road: 1, MileStart: 0, MileEnd: 100, TimestampStart: 1000000, TimestampEnd: 1003400, Speed: 10600},
+			},
+		},
+		{
+			name: "Final mile causes infraction",
+			startObservations: []*ticketer.Observation{
+				{Road: &ticketer.Road{1, 100}, Mile: 0, Plate: "HELLO", Timestamp: 1000000},
+				{Road: &ticketer.Road{1, 100}, Mile: 50, Plate: "HELLO", Timestamp: 1001800},
+			},
+			observation: &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 51, Plate: "HELLO", Timestamp: 1001835},
+			want: []*ticketer.Ticket{
+				{Plate: "HELLO", Road: 1, MileStart: 50, MileEnd: 51, TimestampStart: 1001800, TimestampEnd: 1001835, Speed: 10300},
+			},
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			is := is.New(t)
+
+			tm := ticketer.NewTicketManager()
+			for _, o := range tc.startObservations {
+				tm.Observe(o)
+			}
+
+			tickets := tm.DetectSpeedingInfractions(tc.observation)
+			is.Equal(tickets, tc.want) // ticket mismatch
 		})
 	}
 }
