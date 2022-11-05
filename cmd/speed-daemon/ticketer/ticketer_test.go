@@ -12,6 +12,23 @@ type testObservation struct {
 	wantMatch bool
 }
 
+type testDispatcher struct {
+	id    string
+	roads []uint16
+}
+
+func (td *testDispatcher) ID() string {
+	return td.id
+}
+
+func (td *testDispatcher) Roads() []uint16 {
+	return td.roads
+}
+
+func (td *testDispatcher) SendTicket(t *ticketer.Ticket) {
+
+}
+
 func TestObserve(t *testing.T) {
 	tt := []struct {
 		name         string
@@ -324,36 +341,28 @@ func TestDetectSpeedingInfractions(t *testing.T) {
 		observation       *ticketer.Observation
 		want              []*ticketer.Ticket
 	}{
-		// {
-		// 	name:              "Empty observations",
-		// 	startObservations: nil,
-		// 	observation:       nil,
-		// 	want:              []*ticketer.Ticket{},
-		// },
-		// {
-		// 	name:              "First observation",
-		// 	startObservations: nil,
-		// 	observation:       &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 0, Plate: "HELLO", Timestamp: 1000000},
-		// 	want:              []*ticketer.Ticket{},
-		// },
-		// {
-		// 	name: "First observation",
-		// 	startObservations: []*ticketer.Observation{
-		// 		{Road: &ticketer.Road{1, 100}, Mile: 0, Plate: "HELLO", Timestamp: 1000000},
-		// 	},
-		// 	observation: &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 100, Plate: "HELLO", Timestamp: 1003400},
-		// 	want: []*ticketer.Ticket{
-		// 		{
-		// 			Plate:          "HELLO",
-		// 			Road:           1,
-		// 			MileStart:      0,
-		// 			MileEnd:        100,
-		// 			TimestampStart: 1000000,
-		// 			TimestampEnd:   1003400,
-		// 			Speed:          10600,
-		// 		},
-		// 	},
-		// },
+		{
+			name:              "Empty observations",
+			startObservations: nil,
+			observation:       nil,
+			want:              []*ticketer.Ticket{},
+		},
+		{
+			name:              "First observation",
+			startObservations: nil,
+			observation:       &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 0, Plate: "HELLO", Timestamp: 1000000},
+			want:              []*ticketer.Ticket{},
+		},
+		{
+			name: "First observation",
+			startObservations: []*ticketer.Observation{
+				{Road: &ticketer.Road{1, 100}, Mile: 0, Plate: "HELLO", Timestamp: 1000000},
+			},
+			observation: &ticketer.Observation{Road: &ticketer.Road{1, 100}, Mile: 100, Plate: "HELLO", Timestamp: 1003400},
+			want: []*ticketer.Ticket{
+				{Plate: "HELLO", Road: 1, MileStart: 0, MileEnd: 100, TimestampStart: 1000000, TimestampEnd: 1003400, Speed: 10600},
+			},
+		},
 		{
 			name: "Ticket per infraction",
 			startObservations: []*ticketer.Observation{
@@ -391,6 +400,124 @@ func TestDetectSpeedingInfractions(t *testing.T) {
 
 			tickets := tm.DetectSpeedingInfractions(tc.observation)
 			is.Equal(tickets, tc.want) // ticket mismatch
+		})
+	}
+}
+
+func TestAddDispatcher(t *testing.T) {
+	tt := []struct {
+		name                 string
+		dispatchers          []ticketer.Dispatcher
+		wantDispatcherCounts map[uint16]int
+	}{
+		{
+			name:                 "Single dispatcher",
+			dispatchers:          []ticketer.Dispatcher{&testDispatcher{id: "dispatcher_1", roads: []uint16{1, 2, 3}}},
+			wantDispatcherCounts: map[uint16]int{1: 1, 2: 1, 3: 1},
+		},
+		{
+			name: "Multiple dispatchers",
+			dispatchers: []ticketer.Dispatcher{
+				&testDispatcher{id: "dispatcher_1", roads: []uint16{1, 2, 3}},
+				&testDispatcher{id: "dispatcher_2", roads: []uint16{2}},
+				&testDispatcher{id: "dispatcher_3", roads: []uint16{2, 3}},
+				&testDispatcher{id: "dispatcher_4", roads: []uint16{10}},
+				&testDispatcher{id: "dispatcher_5", roads: []uint16{10, 11, 2}},
+			},
+			wantDispatcherCounts: map[uint16]int{1: 1, 2: 4, 3: 2, 10: 2, 11: 1},
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			is := is.New(t)
+
+			tm := ticketer.NewTicketManager()
+
+			for _, d := range tc.dispatchers {
+				tm.AddDispatcher(d)
+			}
+
+			for k, wantCount := range tc.wantDispatcherCounts {
+				is.Equal(len(tm.Dispatchers[k]), wantCount) // dispatcher count for road mismatch
+			}
+		})
+	}
+}
+
+func TestRemoveDispatcher(t *testing.T) {
+	tt := []struct {
+		name                 string
+		startDispatchers     []ticketer.Dispatcher
+		dispatchers          []ticketer.Dispatcher
+		wantDispatcherCounts map[uint16]int
+	}{
+		{
+			name:                 "Remove dispatcher that does not exist",
+			dispatchers:          []ticketer.Dispatcher{&testDispatcher{id: "dispatcher_1", roads: []uint16{1, 2, 3}}},
+			wantDispatcherCounts: map[uint16]int{1: 0, 2: 0, 3: 0},
+		},
+		{
+			name:                 "Add then remove dispatcher",
+			startDispatchers:     []ticketer.Dispatcher{&testDispatcher{id: "dispatcher_1", roads: []uint16{1, 2, 3}}},
+			dispatchers:          []ticketer.Dispatcher{&testDispatcher{id: "dispatcher_1", roads: []uint16{1, 2, 3}}},
+			wantDispatcherCounts: map[uint16]int{1: 0, 2: 0, 3: 0},
+		},
+		{
+			name: "Add then remove multiple dispatchers",
+			startDispatchers: []ticketer.Dispatcher{
+				&testDispatcher{id: "dispatcher_1", roads: []uint16{1, 2, 3}},
+				&testDispatcher{id: "dispatcher_2", roads: []uint16{2}},
+				&testDispatcher{id: "dispatcher_3", roads: []uint16{2, 3}},
+				&testDispatcher{id: "dispatcher_4", roads: []uint16{10}},
+				&testDispatcher{id: "dispatcher_5", roads: []uint16{10, 11, 2}},
+			},
+			dispatchers: []ticketer.Dispatcher{
+				&testDispatcher{id: "dispatcher_1", roads: []uint16{1, 2, 3}},
+				&testDispatcher{id: "dispatcher_2", roads: []uint16{2}},
+				&testDispatcher{id: "dispatcher_3", roads: []uint16{2, 3}},
+				&testDispatcher{id: "dispatcher_4", roads: []uint16{10}},
+				&testDispatcher{id: "dispatcher_5", roads: []uint16{10, 11, 2}},
+			},
+			wantDispatcherCounts: map[uint16]int{1: 0, 2: 0, 3: 0, 10: 0, 11: 0},
+		},
+		{
+			name: "Add then remove some dispatchers",
+			startDispatchers: []ticketer.Dispatcher{
+				&testDispatcher{id: "dispatcher_1", roads: []uint16{1, 2, 3}},
+				&testDispatcher{id: "dispatcher_2", roads: []uint16{2}},
+				&testDispatcher{id: "dispatcher_3", roads: []uint16{2, 3}},
+				&testDispatcher{id: "dispatcher_4", roads: []uint16{10}},
+				&testDispatcher{id: "dispatcher_5", roads: []uint16{10, 11, 2}},
+			},
+			dispatchers: []ticketer.Dispatcher{
+				&testDispatcher{id: "dispatcher_2", roads: []uint16{2}},
+				&testDispatcher{id: "dispatcher_3", roads: []uint16{2, 3}},
+				&testDispatcher{id: "dispatcher_5", roads: []uint16{10, 11, 2}},
+			},
+			wantDispatcherCounts: map[uint16]int{1: 1, 2: 1, 3: 1, 10: 1, 11: 0},
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			is := is.New(t)
+
+			tm := ticketer.NewTicketManager()
+
+			for _, d := range tc.startDispatchers {
+				tm.AddDispatcher(d)
+			}
+
+			for _, d := range tc.dispatchers {
+				tm.RemoveDispatcher(d)
+			}
+
+			for k, wantCount := range tc.wantDispatcherCounts {
+				is.Equal(len(tm.Dispatchers[k]), wantCount) // dispatcher count for road mismatch
+			}
 		})
 	}
 }

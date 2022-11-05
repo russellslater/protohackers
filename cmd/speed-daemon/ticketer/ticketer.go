@@ -31,7 +31,8 @@ type observationKey struct {
 }
 
 type Dispatcher interface {
-	Road() *Road
+	ID() string
+	Roads() []uint16
 	SendTicket(t *Ticket)
 }
 
@@ -64,13 +65,14 @@ func NewTicket(plate string, road uint16, mileStart uint16, mileEnd uint16, time
 
 type TicketManager struct {
 	Observations  map[observationKey][]*Observation
-	Dispatcher    []*Dispatcher
+	Dispatchers   map[uint16][]Dispatcher
 	UnsentTickets []*Ticket
 }
 
 func NewTicketManager() *TicketManager {
 	return &TicketManager{
 		Observations: map[observationKey][]*Observation{},
+		Dispatchers:  map[uint16][]Dispatcher{},
 	}
 }
 
@@ -137,16 +139,46 @@ func (t *TicketManager) DetectSpeeding(o1 *Observation, o2 *Observation) (uint16
 	return speed, t.comparable(o1, o2) && speed > o1.Road.Limit
 }
 
+func (t *TicketManager) AttemptTicketIssue(ticket *Ticket) {
+
+}
+
 func (t *TicketManager) HasUnsentTicket(r *Road) *Ticket {
 	// TODO
 	return nil
 }
 
-func (t *TicketManager) AddDispatcher(d *Dispatcher) {
-	// TODO
+func (t *TicketManager) AddDispatcher(d Dispatcher) {
+	// associate each Dispatcher with every road its responsible for
+	for _, r := range d.Roads() {
+		found := false
+		for _, dispatcher := range t.Dispatchers[r] {
+			if dispatcher.ID() == d.ID() {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Dispatchers[r] = append(t.Dispatchers[r], d)
+		}
+	}
 }
 
-func (t *TicketManager) LocateDispatcher(r *Road) *Dispatcher {
-	// TODO
+func (t *TicketManager) RemoveDispatcher(d Dispatcher) {
+	for _, r := range d.Roads() {
+		rds := t.Dispatchers[r]
+		for i, dispatcher := range rds {
+			if dispatcher.ID() == d.ID() {
+				rds[i] = rds[len(rds)-1]
+				t.Dispatchers[r] = rds[:len(rds)-1]
+				break
+			}
+		}
+	}
+}
+
+func (t *TicketManager) LocateDispatcher(roadID uint16) Dispatcher {
+	// return first dispatcher found for road
+
 	return nil
 }
