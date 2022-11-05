@@ -13,20 +13,23 @@ type testObservation struct {
 }
 
 type testDispatcher struct {
-	id    string
-	roads []uint16
+	id               string
+	roads            []ticketer.RoadID
+	sentTicketCalled bool
+	lastTicketSent   *ticketer.Ticket
 }
 
 func (td *testDispatcher) ID() string {
 	return td.id
 }
 
-func (td *testDispatcher) Roads() []uint16 {
+func (td *testDispatcher) Roads() []ticketer.RoadID {
 	return td.roads
 }
 
 func (td *testDispatcher) SendTicket(t *ticketer.Ticket) {
-
+	td.sentTicketCalled = true
+	td.lastTicketSent = t
 }
 
 func TestObserve(t *testing.T) {
@@ -408,23 +411,23 @@ func TestAddDispatcher(t *testing.T) {
 	tt := []struct {
 		name                 string
 		dispatchers          []ticketer.Dispatcher
-		wantDispatcherCounts map[uint16]int
+		wantDispatcherCounts map[ticketer.RoadID]int
 	}{
 		{
 			name:                 "Single dispatcher",
-			dispatchers:          []ticketer.Dispatcher{&testDispatcher{id: "dispatcher_1", roads: []uint16{1, 2, 3}}},
-			wantDispatcherCounts: map[uint16]int{1: 1, 2: 1, 3: 1},
+			dispatchers:          []ticketer.Dispatcher{&testDispatcher{id: "dispatcher_1", roads: []ticketer.RoadID{1, 2, 3}}},
+			wantDispatcherCounts: map[ticketer.RoadID]int{1: 1, 2: 1, 3: 1},
 		},
 		{
 			name: "Multiple dispatchers",
 			dispatchers: []ticketer.Dispatcher{
-				&testDispatcher{id: "dispatcher_1", roads: []uint16{1, 2, 3}},
-				&testDispatcher{id: "dispatcher_2", roads: []uint16{2}},
-				&testDispatcher{id: "dispatcher_3", roads: []uint16{2, 3}},
-				&testDispatcher{id: "dispatcher_4", roads: []uint16{10}},
-				&testDispatcher{id: "dispatcher_5", roads: []uint16{10, 11, 2}},
+				&testDispatcher{id: "dispatcher_1", roads: []ticketer.RoadID{1, 2, 3}},
+				&testDispatcher{id: "dispatcher_2", roads: []ticketer.RoadID{2}},
+				&testDispatcher{id: "dispatcher_3", roads: []ticketer.RoadID{2, 3}},
+				&testDispatcher{id: "dispatcher_4", roads: []ticketer.RoadID{10}},
+				&testDispatcher{id: "dispatcher_5", roads: []ticketer.RoadID{10, 11, 2}},
 			},
-			wantDispatcherCounts: map[uint16]int{1: 1, 2: 4, 3: 2, 10: 2, 11: 1},
+			wantDispatcherCounts: map[ticketer.RoadID]int{1: 1, 2: 4, 3: 2, 10: 2, 11: 1},
 		},
 	}
 
@@ -451,52 +454,52 @@ func TestRemoveDispatcher(t *testing.T) {
 		name                 string
 		startDispatchers     []ticketer.Dispatcher
 		dispatchers          []ticketer.Dispatcher
-		wantDispatcherCounts map[uint16]int
+		wantDispatcherCounts map[ticketer.RoadID]int
 	}{
 		{
 			name:                 "Remove dispatcher that does not exist",
-			dispatchers:          []ticketer.Dispatcher{&testDispatcher{id: "dispatcher_1", roads: []uint16{1, 2, 3}}},
-			wantDispatcherCounts: map[uint16]int{1: 0, 2: 0, 3: 0},
+			dispatchers:          []ticketer.Dispatcher{&testDispatcher{id: "dispatcher_1", roads: []ticketer.RoadID{1, 2, 3}}},
+			wantDispatcherCounts: map[ticketer.RoadID]int{1: 0, 2: 0, 3: 0},
 		},
 		{
 			name:                 "Add then remove dispatcher",
-			startDispatchers:     []ticketer.Dispatcher{&testDispatcher{id: "dispatcher_1", roads: []uint16{1, 2, 3}}},
-			dispatchers:          []ticketer.Dispatcher{&testDispatcher{id: "dispatcher_1", roads: []uint16{1, 2, 3}}},
-			wantDispatcherCounts: map[uint16]int{1: 0, 2: 0, 3: 0},
+			startDispatchers:     []ticketer.Dispatcher{&testDispatcher{id: "dispatcher_1", roads: []ticketer.RoadID{1, 2, 3}}},
+			dispatchers:          []ticketer.Dispatcher{&testDispatcher{id: "dispatcher_1", roads: []ticketer.RoadID{1, 2, 3}}},
+			wantDispatcherCounts: map[ticketer.RoadID]int{1: 0, 2: 0, 3: 0},
 		},
 		{
 			name: "Add then remove multiple dispatchers",
 			startDispatchers: []ticketer.Dispatcher{
-				&testDispatcher{id: "dispatcher_1", roads: []uint16{1, 2, 3}},
-				&testDispatcher{id: "dispatcher_2", roads: []uint16{2}},
-				&testDispatcher{id: "dispatcher_3", roads: []uint16{2, 3}},
-				&testDispatcher{id: "dispatcher_4", roads: []uint16{10}},
-				&testDispatcher{id: "dispatcher_5", roads: []uint16{10, 11, 2}},
+				&testDispatcher{id: "dispatcher_1", roads: []ticketer.RoadID{1, 2, 3}},
+				&testDispatcher{id: "dispatcher_2", roads: []ticketer.RoadID{2}},
+				&testDispatcher{id: "dispatcher_3", roads: []ticketer.RoadID{2, 3}},
+				&testDispatcher{id: "dispatcher_4", roads: []ticketer.RoadID{10}},
+				&testDispatcher{id: "dispatcher_5", roads: []ticketer.RoadID{10, 11, 2}},
 			},
 			dispatchers: []ticketer.Dispatcher{
-				&testDispatcher{id: "dispatcher_1", roads: []uint16{1, 2, 3}},
-				&testDispatcher{id: "dispatcher_2", roads: []uint16{2}},
-				&testDispatcher{id: "dispatcher_3", roads: []uint16{2, 3}},
-				&testDispatcher{id: "dispatcher_4", roads: []uint16{10}},
-				&testDispatcher{id: "dispatcher_5", roads: []uint16{10, 11, 2}},
+				&testDispatcher{id: "dispatcher_1", roads: []ticketer.RoadID{1, 2, 3}},
+				&testDispatcher{id: "dispatcher_2", roads: []ticketer.RoadID{2}},
+				&testDispatcher{id: "dispatcher_3", roads: []ticketer.RoadID{2, 3}},
+				&testDispatcher{id: "dispatcher_4", roads: []ticketer.RoadID{10}},
+				&testDispatcher{id: "dispatcher_5", roads: []ticketer.RoadID{10, 11, 2}},
 			},
-			wantDispatcherCounts: map[uint16]int{1: 0, 2: 0, 3: 0, 10: 0, 11: 0},
+			wantDispatcherCounts: map[ticketer.RoadID]int{1: 0, 2: 0, 3: 0, 10: 0, 11: 0},
 		},
 		{
 			name: "Add then remove some dispatchers",
 			startDispatchers: []ticketer.Dispatcher{
-				&testDispatcher{id: "dispatcher_1", roads: []uint16{1, 2, 3}},
-				&testDispatcher{id: "dispatcher_2", roads: []uint16{2}},
-				&testDispatcher{id: "dispatcher_3", roads: []uint16{2, 3}},
-				&testDispatcher{id: "dispatcher_4", roads: []uint16{10}},
-				&testDispatcher{id: "dispatcher_5", roads: []uint16{10, 11, 2}},
+				&testDispatcher{id: "dispatcher_1", roads: []ticketer.RoadID{1, 2, 3}},
+				&testDispatcher{id: "dispatcher_2", roads: []ticketer.RoadID{2}},
+				&testDispatcher{id: "dispatcher_3", roads: []ticketer.RoadID{2, 3}},
+				&testDispatcher{id: "dispatcher_4", roads: []ticketer.RoadID{10}},
+				&testDispatcher{id: "dispatcher_5", roads: []ticketer.RoadID{10, 11, 2}},
 			},
 			dispatchers: []ticketer.Dispatcher{
-				&testDispatcher{id: "dispatcher_2", roads: []uint16{2}},
-				&testDispatcher{id: "dispatcher_3", roads: []uint16{2, 3}},
-				&testDispatcher{id: "dispatcher_5", roads: []uint16{10, 11, 2}},
+				&testDispatcher{id: "dispatcher_2", roads: []ticketer.RoadID{2}},
+				&testDispatcher{id: "dispatcher_3", roads: []ticketer.RoadID{2, 3}},
+				&testDispatcher{id: "dispatcher_5", roads: []ticketer.RoadID{10, 11, 2}},
 			},
-			wantDispatcherCounts: map[uint16]int{1: 1, 2: 1, 3: 1, 10: 1, 11: 0},
+			wantDispatcherCounts: map[ticketer.RoadID]int{1: 1, 2: 1, 3: 1, 10: 1, 11: 0},
 		},
 	}
 
@@ -526,35 +529,35 @@ func TestLocateDispatcher(t *testing.T) {
 	tt := []struct {
 		name             string
 		startDispatchers []ticketer.Dispatcher
-		roads            []uint16
+		roads            []ticketer.RoadID
 		wantDispatchers  []ticketer.Dispatcher
 	}{
 		{
 			name:            "LocateDispatcher returns nil if no dispatcher found for road",
-			roads:           []uint16{100},
+			roads:           []ticketer.RoadID{100},
 			wantDispatchers: []ticketer.Dispatcher{nil},
 		},
 		{
 			name:             "Dispatcher located for each road",
-			startDispatchers: []ticketer.Dispatcher{&testDispatcher{id: "dispatcher_1", roads: []uint16{1, 2, 3}}},
-			roads:            []uint16{1, 2, 3},
+			startDispatchers: []ticketer.Dispatcher{&testDispatcher{id: "dispatcher_1", roads: []ticketer.RoadID{1, 2, 3}}},
+			roads:            []ticketer.RoadID{1, 2, 3},
 			wantDispatchers: []ticketer.Dispatcher{
-				&testDispatcher{id: "dispatcher_1", roads: []uint16{1, 2, 3}},
-				&testDispatcher{id: "dispatcher_1", roads: []uint16{1, 2, 3}},
-				&testDispatcher{id: "dispatcher_1", roads: []uint16{1, 2, 3}},
+				&testDispatcher{id: "dispatcher_1", roads: []ticketer.RoadID{1, 2, 3}},
+				&testDispatcher{id: "dispatcher_1", roads: []ticketer.RoadID{1, 2, 3}},
+				&testDispatcher{id: "dispatcher_1", roads: []ticketer.RoadID{1, 2, 3}},
 			},
 		},
 		{
 			name: "Dispatcher registered first is returned first every time",
 			startDispatchers: []ticketer.Dispatcher{
-				&testDispatcher{id: "dispatcher_2", roads: []uint16{3, 4, 5}},
-				&testDispatcher{id: "dispatcher_1", roads: []uint16{1, 2, 3}},
+				&testDispatcher{id: "dispatcher_2", roads: []ticketer.RoadID{3, 4, 5}},
+				&testDispatcher{id: "dispatcher_1", roads: []ticketer.RoadID{1, 2, 3}},
 			},
-			roads: []uint16{3, 3, 3},
+			roads: []ticketer.RoadID{3, 3, 3},
 			wantDispatchers: []ticketer.Dispatcher{
-				&testDispatcher{id: "dispatcher_2", roads: []uint16{3, 4, 5}},
-				&testDispatcher{id: "dispatcher_2", roads: []uint16{3, 4, 5}},
-				&testDispatcher{id: "dispatcher_2", roads: []uint16{3, 4, 5}},
+				&testDispatcher{id: "dispatcher_2", roads: []ticketer.RoadID{3, 4, 5}},
+				&testDispatcher{id: "dispatcher_2", roads: []ticketer.RoadID{3, 4, 5}},
+				&testDispatcher{id: "dispatcher_2", roads: []ticketer.RoadID{3, 4, 5}},
 			},
 		},
 	}
@@ -575,4 +578,55 @@ func TestLocateDispatcher(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAttemptIdenticalTicketIssueWithNoDispatchers(t *testing.T) {
+	is := is.New(t)
+
+	roadID := ticketer.RoadID(1)
+
+	tm := ticketer.NewTicketManager()
+
+	is.Equal(len(tm.SentTickets), 0)   // expected no sent tickets
+	is.Equal(len(tm.UnsentTickets), 0) // expected no unsent tickets
+
+	ticket := ticketer.NewTicket("HELLO", roadID, 50, 51, 1001800, 1001835, 10300)
+	tm.AttemptTicketIssue(ticket)
+
+	is.Equal(len(tm.SentTickets), 0)           // expected no sent tickets
+	is.Equal(len(tm.UnsentTickets), 1)         // expected one road's worth of unsent tickets
+	is.Equal(len(tm.UnsentTickets[roadID]), 1) // expected one unsent ticket
+
+	ticket = ticketer.NewTicket("HELLO", roadID, 50, 51, 1001800, 1001835, 10300)
+	tm.AttemptTicketIssue(ticket)
+
+	ticket = ticketer.NewTicket("HELLO", roadID, 50, 51, 1001800, 1001835, 10300)
+	tm.AttemptTicketIssue(ticket)
+
+	is.Equal(len(tm.SentTickets), 0)           // expected no sent tickets
+	is.Equal(len(tm.UnsentTickets), 1)         // expected one road's worth of unsent tickets
+	is.Equal(len(tm.UnsentTickets[roadID]), 3) // expected three unsent ticket
+}
+
+func TestAttemptTicketIssueWithConnectedDispatcher(t *testing.T) {
+	is := is.New(t)
+
+	tm := ticketer.NewTicketManager()
+
+	dispatcher1 := &testDispatcher{id: "dispatcher_1", roads: []ticketer.RoadID{1, 2}}
+	tm.AddDispatcher(dispatcher1)
+
+	is.Equal(len(tm.SentTickets), 0)              // expected no sent tickets
+	is.Equal(len(tm.UnsentTickets), 0)            // expected no unsent tickets
+	is.Equal(dispatcher1.sentTicketCalled, false) // expected ticket to not be sent yet
+	is.Equal(dispatcher1.lastTicketSent, nil)     // sent ticket mismatch
+
+	roadID := ticketer.RoadID(1)
+	ticket := ticketer.NewTicket("HELLO", roadID, 50, 51, 1001800, 1001835, 10300)
+	tm.AttemptTicketIssue(ticket)
+
+	is.Equal(len(tm.SentTickets), 1)             // expected one sent ticket
+	is.Equal(len(tm.UnsentTickets), 0)           // expected no unsent tickets
+	is.Equal(dispatcher1.sentTicketCalled, true) // expected ticket to be sent
+	is.Equal(dispatcher1.lastTicketSent, ticket) // sent ticket mismatch
 }

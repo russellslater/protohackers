@@ -5,8 +5,10 @@ import (
 	"math"
 )
 
+type RoadID uint16
+
 type Road struct {
-	ID    uint16
+	ID    RoadID
 	Limit uint16
 }
 
@@ -26,19 +28,19 @@ func (o *Observation) key() observationKey {
 }
 
 type observationKey struct {
-	roadID uint16
+	roadID RoadID
 	plate  string
 }
 
 type Dispatcher interface {
 	ID() string
-	Roads() []uint16
+	Roads() []RoadID
 	SendTicket(t *Ticket)
 }
 
 type Ticket struct {
 	Plate          string
-	Road           uint16
+	Road           RoadID
 	MileStart      uint16
 	MileEnd        uint16
 	TimestampStart uint32
@@ -46,12 +48,21 @@ type Ticket struct {
 	Speed          uint16 // 100x mile per hour
 }
 
+type ticketKey struct {
+	plate string
+	day   int
+}
+
+func (t *Ticket) key() ticketKey {
+	return ticketKey{plate: t.Plate, day: t.StartDay()}
+}
+
 func (t *Ticket) String() string {
 	return fmt.Sprintf("{P: %s, R: %d, M0: %d, M1: %d, M0: %d, M1: %d, S: %d}",
 		t.Plate, t.Road, t.MileStart, t.MileEnd, t.TimestampStart, t.TimestampEnd, t.Speed)
 }
 
-func NewTicket(plate string, road uint16, mileStart uint16, mileEnd uint16, timestampStart uint32, timestampEnd uint32, speed uint16) *Ticket {
+func NewTicket(plate string, road RoadID, mileStart uint16, mileEnd uint16, timestampStart uint32, timestampEnd uint32, speed uint16) *Ticket {
 	return &Ticket{
 		Plate:          plate,
 		Road:           road,
@@ -63,16 +74,31 @@ func NewTicket(plate string, road uint16, mileStart uint16, mileEnd uint16, time
 	}
 }
 
+func (t *Ticket) StartDay() int {
+	return int(math.Floor(float64(t.TimestampStart) / float64(86400)))
+}
+
+func (t *Ticket) EndDay() int {
+	return int(math.Floor(float64(t.TimestampEnd) / float64(86400)))
+}
+
+func (t *Ticket) DayDiff() int {
+	return t.StartDay() - t.EndDay()
+}
+
 type TicketManager struct {
 	Observations  map[observationKey][]*Observation
-	Dispatchers   map[uint16][]Dispatcher
-	UnsentTickets []*Ticket
+	Dispatchers   map[RoadID][]Dispatcher
+	SentTickets   map[ticketKey]*Ticket
+	UnsentTickets map[RoadID][]*Ticket
 }
 
 func NewTicketManager() *TicketManager {
 	return &TicketManager{
-		Observations: map[observationKey][]*Observation{},
-		Dispatchers:  map[uint16][]Dispatcher{},
+		Observations:  map[observationKey][]*Observation{},
+		Dispatchers:   map[RoadID][]Dispatcher{},
+		SentTickets:   map[ticketKey]*Ticket{},
+		UnsentTickets: map[RoadID][]*Ticket{},
 	}
 }
 
@@ -140,7 +166,15 @@ func (t *TicketManager) DetectSpeeding(o1 *Observation, o2 *Observation) (uint16
 }
 
 func (t *TicketManager) AttemptTicketIssue(ticket *Ticket) {
-
+	// has ticket been issued today for plate?
+	if _, ok := t.SentTickets[ticket.key()]; !ok {
+		if dispatcher := t.LocateDispatcher(ticket.Road); dispatcher != nil {
+			dispatcher.SendTicket(ticket)
+			t.SentTickets[ticket.key()] = ticket
+		} else {
+			t.UnsentTickets[ticket.Road] = append(t.UnsentTickets[ticket.Road], ticket)
+		}
+	}
 }
 
 func (t *TicketManager) HasUnsentTicket(r *Road) *Ticket {
@@ -160,6 +194,7 @@ func (t *TicketManager) AddDispatcher(d Dispatcher) {
 		}
 		if !found {
 			t.Dispatchers[r] = append(t.Dispatchers[r], d)
+			// TODO: any unsent tickets for this road?
 		}
 	}
 }
@@ -177,7 +212,7 @@ func (t *TicketManager) RemoveDispatcher(d Dispatcher) {
 	}
 }
 
-func (t *TicketManager) LocateDispatcher(roadID uint16) Dispatcher {
+func (t *TicketManager) LocateDispatcher(roadID RoadID) Dispatcher {
 	// return first dispatcher found for road
 	if dispatchers, ok := t.Dispatchers[roadID]; ok {
 		for _, d := range dispatchers {
