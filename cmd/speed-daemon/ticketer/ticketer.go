@@ -50,6 +50,10 @@ func NewTicketManager() *TicketManager {
 	}
 }
 
+func (t *TicketManager) comparable(o1 *Observation, o2 *Observation) bool {
+	return o1 != nil && o2 != nil && o1 != o2 && o1.comparable(o2)
+}
+
 func (t *TicketManager) Observe(o *Observation) bool {
 	if o == nil {
 		return false
@@ -70,7 +74,7 @@ func (t *TicketManager) Observe(o *Observation) bool {
 func (t *TicketManager) CalculateSpeed(o1 *Observation, o2 *Observation) uint16 {
 	speed := 0
 
-	if o1 != nil && o2 != nil && o1 != o2 && o1.comparable(o2) {
+	if t.comparable(o1, o2) {
 		distance := math.Abs(float64(o1.Mile) - float64(o2.Mile))
 		timeSeconds := math.Abs(float64(o1.Timestamp) - float64(o2.Timestamp))
 
@@ -81,9 +85,8 @@ func (t *TicketManager) CalculateSpeed(o1 *Observation, o2 *Observation) uint16 
 	return uint16(speed)
 }
 
-func (t *TicketManager) Detect(o1 *Observation, o2 *Observation) bool {
-	// TODO
-	return true
+func (t *TicketManager) DetectSpeeding(o1 *Observation, o2 *Observation) bool {
+	return t.comparable(o1, o2) && t.CalculateSpeed(o1, o2) > o1.Road.Limit
 }
 
 func (t *TicketManager) WriteTicket(o1 *Observation, o2 *Observation) *Ticket {
