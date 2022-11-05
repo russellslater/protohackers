@@ -12,6 +12,11 @@ type Observation struct {
 	Timestamp uint32
 }
 
+type observationKey struct {
+	roadID uint16
+	plate  string
+}
+
 type Dispatcher interface {
 	Road() *Road
 	SendTicket(t *Ticket)
@@ -28,19 +33,32 @@ type Ticket struct {
 }
 
 type TicketManager struct {
-	Observations  []*Observation
+	Observations  map[observationKey][]*Observation
 	Dispatcher    []*Dispatcher
 	UnsentTickets []*Ticket
 }
 
 func NewTicketManager() *TicketManager {
 	return &TicketManager{
-		Observations: []*Observation{},
+		Observations: map[observationKey][]*Observation{},
 	}
 }
 
-func (t *TicketManager) Observe(o *Observation) {
-	// TODO
+func (t *TicketManager) Observe(o *Observation) bool {
+	if o == nil {
+		return false
+	}
+
+	key := observationKey{roadID: o.Road.ID, plate: o.Plate}
+
+	isMatch := false
+	if obs, ok := t.Observations[key]; ok {
+		isMatch = len(obs) > 0
+	}
+
+	t.Observations[key] = append(t.Observations[key], o)
+
+	return isMatch
 }
 
 func (t *TicketManager) Detect(o1 *Observation, o2 *Observation) bool {
