@@ -521,3 +521,58 @@ func TestRemoveDispatcher(t *testing.T) {
 		})
 	}
 }
+
+func TestLocateDispatcher(t *testing.T) {
+	tt := []struct {
+		name             string
+		startDispatchers []ticketer.Dispatcher
+		roads            []uint16
+		wantDispatchers  []ticketer.Dispatcher
+	}{
+		{
+			name:            "LocateDispatcher returns nil if no dispatcher found for road",
+			roads:           []uint16{100},
+			wantDispatchers: []ticketer.Dispatcher{nil},
+		},
+		{
+			name:             "Dispatcher located for each road",
+			startDispatchers: []ticketer.Dispatcher{&testDispatcher{id: "dispatcher_1", roads: []uint16{1, 2, 3}}},
+			roads:            []uint16{1, 2, 3},
+			wantDispatchers: []ticketer.Dispatcher{
+				&testDispatcher{id: "dispatcher_1", roads: []uint16{1, 2, 3}},
+				&testDispatcher{id: "dispatcher_1", roads: []uint16{1, 2, 3}},
+				&testDispatcher{id: "dispatcher_1", roads: []uint16{1, 2, 3}},
+			},
+		},
+		{
+			name: "Dispatcher registered first is returned first every time",
+			startDispatchers: []ticketer.Dispatcher{
+				&testDispatcher{id: "dispatcher_2", roads: []uint16{3, 4, 5}},
+				&testDispatcher{id: "dispatcher_1", roads: []uint16{1, 2, 3}},
+			},
+			roads: []uint16{3, 3, 3},
+			wantDispatchers: []ticketer.Dispatcher{
+				&testDispatcher{id: "dispatcher_2", roads: []uint16{3, 4, 5}},
+				&testDispatcher{id: "dispatcher_2", roads: []uint16{3, 4, 5}},
+				&testDispatcher{id: "dispatcher_2", roads: []uint16{3, 4, 5}},
+			},
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			is := is.New(t)
+
+			tm := ticketer.NewTicketManager()
+
+			for _, d := range tc.startDispatchers {
+				tm.AddDispatcher(d)
+			}
+
+			for i, r := range tc.roads {
+				is.Equal(tm.LocateDispatcher(r), tc.wantDispatchers[i]) // dispatcher mismatch
+			}
+		})
+	}
+}

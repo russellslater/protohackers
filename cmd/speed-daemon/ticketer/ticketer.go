@@ -179,6 +179,10 @@ func (t *TicketManager) RemoveDispatcher(d Dispatcher) {
 
 func (t *TicketManager) LocateDispatcher(roadID uint16) Dispatcher {
 	// return first dispatcher found for road
-
+	if dispatchers, ok := t.Dispatchers[roadID]; ok {
+		for _, d := range dispatchers {
+			return d
+		}
+	}
 	return nil
 }
