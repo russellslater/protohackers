@@ -34,6 +34,9 @@ func (t *TicketManager) Observe(o *Observation) bool {
 	isMatch := false
 	if obs, ok := t.Observations[key]; ok {
 		isMatch = len(obs) > 0
+		for _, ticket := range t.DetectSpeedingInfractions(o) {
+			t.AttemptTicketIssue(ticket)
+		}
 	}
 
 	t.Observations[key] = append(t.Observations[key], o)

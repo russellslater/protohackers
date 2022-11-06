@@ -710,3 +710,77 @@ func TestAddingDispatcherTriggersTicketIssue(t *testing.T) {
 	is.Equal(dispatcher1.sentTicketCount, 4) // expected dispatcher1 to still be at 4 tickets
 	is.Equal(dispatcher2.sentTicketCount, 1) // expected 1 ticket to be received by dispatcher2
 }
+
+func TestObserveWillAttemptToIssuesTickets(t *testing.T) {
+	is := is.New(t)
+
+	tm := ticketer.NewTicketManager()
+
+	dispatcher1 := &testDispatcher{id: "dispatcher_1", roads: []ticketer.RoadID{1}}
+	tm.AddDispatcher(dispatcher1)
+
+	is.Equal(len(tm.SentTickets), 0)   // expected no sent tickets
+	is.Equal(len(tm.UnsentTickets), 0) // expected no unsent tickets
+
+	road1 := &ticketer.Road{ID: ticketer.RoadID(1), Limit: 50}
+
+	observation1Road1 := &ticketer.Observation{
+		Road:      road1,
+		Mile:      0,
+		Plate:     "ABC123",
+		Timestamp: 0,
+	}
+	tm.Observe(observation1Road1)
+
+	// no ticket after single observation
+	is.Equal(len(tm.SentTickets), 0)   // expected no sent tickets
+	is.Equal(len(tm.UnsentTickets), 0) // expected no unsent tickets
+
+	observation2Road1 := &ticketer.Observation{
+		Road:      road1,
+		Mile:      10,
+		Plate:     "ABC123",
+		Timestamp: 700, // 720 is on speed limit
+	}
+	tm.Observe(observation2Road1)
+
+	is.Equal(len(tm.SentTickets), 1)         // expected 1 sent ticket
+	is.Equal(len(tm.UnsentTickets), 0)       // expected no unsent tickets
+	is.Equal(dispatcher1.sentTicketCount, 1) // expected 1 ticket to be received by dispatcher1
+
+	// overlapping observation
+	observation3Road1 := &ticketer.Observation{
+		Road:      road1,
+		Mile:      9,
+		Plate:     "ABC123",
+		Timestamp: 300, // 648 is on speed limit
+	}
+	tm.Observe(observation3Road1)
+
+	is.Equal(len(tm.SentTickets), 1)         // expected no more sent tickets
+	is.Equal(len(tm.UnsentTickets), 0)       // expected no unsent tickets
+	is.Equal(dispatcher1.sentTicketCount, 1) // expected dispatcher1 to still be at 1 ticket
+
+	road2 := &ticketer.Road{ID: ticketer.RoadID(2), Limit: 10}
+
+	observation1Road2 := &ticketer.Observation{
+		Road:      road2,
+		Mile:      0,
+		Plate:     "DEF456",
+		Timestamp: 0,
+	}
+
+	observation2Road2 := &ticketer.Observation{
+		Road:      road2,
+		Mile:      100,
+		Plate:     "DEF456",
+		Timestamp: 2800,
+	}
+
+	tm.Observe(observation1Road2)
+	tm.Observe(observation2Road2)
+
+	// no ticket after single observation
+	is.Equal(len(tm.SentTickets), 1)   // expected no more sent tickets
+	is.Equal(len(tm.UnsentTickets), 1) // expected 1 unsent ticket
+}
