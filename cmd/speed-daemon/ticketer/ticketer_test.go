@@ -13,10 +13,10 @@ type testObservation struct {
 }
 
 type testDispatcher struct {
-	id               string
-	roads            []ticketer.RoadID
-	sentTicketCalled bool
-	lastTicketSent   *ticketer.Ticket
+	id              string
+	roads           []ticketer.RoadID
+	sentTicketCount int
+	lastTicketSent  *ticketer.Ticket
 }
 
 func (td *testDispatcher) ID() string {
@@ -28,7 +28,7 @@ func (td *testDispatcher) Roads() []ticketer.RoadID {
 }
 
 func (td *testDispatcher) SendTicket(t *ticketer.Ticket) {
-	td.sentTicketCalled = true
+	td.sentTicketCount++
 	td.lastTicketSent = t
 }
 
@@ -583,29 +583,27 @@ func TestLocateDispatcher(t *testing.T) {
 func TestAttemptIdenticalTicketIssueWithNoDispatchers(t *testing.T) {
 	is := is.New(t)
 
-	roadID := ticketer.RoadID(1)
-
 	tm := ticketer.NewTicketManager()
 
 	is.Equal(len(tm.SentTickets), 0)   // expected no sent tickets
 	is.Equal(len(tm.UnsentTickets), 0) // expected no unsent tickets
 
-	ticket := ticketer.NewTicket("HELLO", roadID, 50, 51, 1001800, 1001835, 10300)
+	ticket := ticketer.NewTicket("HELLO", ticketer.RoadID(1), 50, 51, 1001800, 1001835, 10300)
 	tm.AttemptTicketIssue(ticket)
 
-	is.Equal(len(tm.SentTickets), 0)           // expected no sent tickets
-	is.Equal(len(tm.UnsentTickets), 1)         // expected one road's worth of unsent tickets
-	is.Equal(len(tm.UnsentTickets[roadID]), 1) // expected one unsent ticket
+	is.Equal(len(tm.SentTickets), 0)                       // expected no sent tickets
+	is.Equal(len(tm.UnsentTickets), 1)                     // expected unsent tickets for 1 road
+	is.Equal(len(tm.UnsentTickets[ticketer.RoadID(1)]), 1) // expected 1 unsent ticket
 
-	ticket = ticketer.NewTicket("HELLO", roadID, 50, 51, 1001800, 1001835, 10300)
+	ticket = ticketer.NewTicket("HELLO", ticketer.RoadID(1), 50, 51, 1001800, 1001835, 10300)
 	tm.AttemptTicketIssue(ticket)
 
-	ticket = ticketer.NewTicket("HELLO", roadID, 50, 51, 1001800, 1001835, 10300)
+	ticket = ticketer.NewTicket("HELLO", ticketer.RoadID(1), 50, 51, 1001800, 1001835, 10300)
 	tm.AttemptTicketIssue(ticket)
 
-	is.Equal(len(tm.SentTickets), 0)           // expected no sent tickets
-	is.Equal(len(tm.UnsentTickets), 1)         // expected one road's worth of unsent tickets
-	is.Equal(len(tm.UnsentTickets[roadID]), 3) // expected three unsent ticket
+	is.Equal(len(tm.SentTickets), 0)                       // expected no sent tickets
+	is.Equal(len(tm.UnsentTickets), 1)                     // expected unsent tickets for 1 road
+	is.Equal(len(tm.UnsentTickets[ticketer.RoadID(1)]), 3) // expected 3 unsent ticket
 }
 
 func TestAttemptTicketIssueWithConnectedDispatcher(t *testing.T) {
@@ -616,17 +614,99 @@ func TestAttemptTicketIssueWithConnectedDispatcher(t *testing.T) {
 	dispatcher1 := &testDispatcher{id: "dispatcher_1", roads: []ticketer.RoadID{1, 2}}
 	tm.AddDispatcher(dispatcher1)
 
-	is.Equal(len(tm.SentTickets), 0)              // expected no sent tickets
-	is.Equal(len(tm.UnsentTickets), 0)            // expected no unsent tickets
-	is.Equal(dispatcher1.sentTicketCalled, false) // expected ticket to not be sent yet
-	is.Equal(dispatcher1.lastTicketSent, nil)     // sent ticket mismatch
+	is.Equal(len(tm.SentTickets), 0)          // expected no sent tickets
+	is.Equal(len(tm.UnsentTickets), 0)        // expected no unsent tickets
+	is.Equal(dispatcher1.sentTicketCount, 0)  // expected ticket to not be sent yet
+	is.Equal(dispatcher1.lastTicketSent, nil) // sent ticket mismatch
 
-	roadID := ticketer.RoadID(1)
-	ticket := ticketer.NewTicket("HELLO", roadID, 50, 51, 1001800, 1001835, 10300)
+	ticket := ticketer.NewTicket("HELLO", ticketer.RoadID(1), 50, 51, 1_001_800, 1_001_835, 10300)
 	tm.AttemptTicketIssue(ticket)
 
-	is.Equal(len(tm.SentTickets), 1)             // expected one sent ticket
+	is.Equal(len(tm.SentTickets), 1)             // expected 1 sent ticket
 	is.Equal(len(tm.UnsentTickets), 0)           // expected no unsent tickets
-	is.Equal(dispatcher1.sentTicketCalled, true) // expected ticket to be sent
+	is.Equal(dispatcher1.sentTicketCount, 1)     // expected ticket to be sent
 	is.Equal(dispatcher1.lastTicketSent, ticket) // sent ticket mismatch
+}
+
+func TestIssueMaxOneTicketPerPlateDayCombination(t *testing.T) {
+	is := is.New(t)
+
+	tm := ticketer.NewTicketManager()
+
+	dispatcher1 := &testDispatcher{id: "dispatcher_1", roads: []ticketer.RoadID{1, 2}}
+	tm.AddDispatcher(dispatcher1)
+
+	ticket1 := ticketer.NewTicket("HELLO", ticketer.RoadID(1), 50, 51, 1_001_800, 1_001_835, 10300)
+	tm.AttemptTicketIssue(ticket1)
+
+	is.Equal(len(tm.SentTickets), 1)              // expected 1 sent ticket
+	is.Equal(len(tm.UnsentTickets), 0)            // expected no unsent tickets
+	is.Equal(dispatcher1.sentTicketCount, 1)      // expected ticket to be sent
+	is.Equal(dispatcher1.lastTicketSent, ticket1) // sent ticket mismatch
+
+	// compared with ticket1, same plate, same day - road is different but doesn't matter
+	ticket2 := ticketer.NewTicket("HELLO", ticketer.RoadID(2), 10, 20, 950_400, 951_000, 10300)
+	tm.AttemptTicketIssue(ticket2)
+
+	is.Equal(len(tm.SentTickets), 1)              // expected 1 sent ticket
+	is.Equal(len(tm.UnsentTickets), 0)            // expected no unsent tickets
+	is.Equal(dispatcher1.sentTicketCount, 1)      // expected no change in number of tickets sent
+	is.Equal(dispatcher1.lastTicketSent, ticket1) // sent ticket mismatch
+
+	// compared with ticket1, same plate, new day
+	ticket3 := ticketer.NewTicket("HELLO", ticketer.RoadID(2), 10, 20, 1_036_800, 1_037_800, 10300)
+	tm.AttemptTicketIssue(ticket3)
+
+	is.Equal(len(tm.SentTickets), 2)              // expected 2 sent tickets
+	is.Equal(len(tm.UnsentTickets), 0)            // expected no unsent tickets
+	is.Equal(dispatcher1.sentTicketCount, 2)      // expected ticket to be sent
+	is.Equal(dispatcher1.lastTicketSent, ticket3) // sent ticket mismatch
+
+	// compared with ticket1, new plate, same day
+	ticket4 := ticketer.NewTicket("WORLD", ticketer.RoadID(1), 50, 51, 1_001_800, 1_001_835, 10300)
+	tm.AttemptTicketIssue(ticket4)
+
+	is.Equal(len(tm.SentTickets), 3)              // expected 3 sent tickets
+	is.Equal(len(tm.UnsentTickets), 0)            // expected no unsent tickets
+	is.Equal(dispatcher1.sentTicketCount, 3)      // expected ticket to be sent
+	is.Equal(dispatcher1.lastTicketSent, ticket4) // sent ticket mismatch
+}
+
+func TestAddingDispatcherTriggersTicketIssue(t *testing.T) {
+	is := is.New(t)
+
+	tm := ticketer.NewTicketManager()
+
+	ticket1 := ticketer.NewTicket("HELLO", ticketer.RoadID(1), 50, 51, 1_001_800, 1_001_835, 10300)
+	ticket2 := ticketer.NewTicket("WORLD", ticketer.RoadID(1), 50, 51, 1_001_800, 1_001_835, 10300)
+	ticket3 := ticketer.NewTicket("HELLO", ticketer.RoadID(2), 50, 51, 1_209_600, 1_210_600, 10300)
+	ticket4 := ticketer.NewTicket("APPLE", ticketer.RoadID(2), 50, 51, 1_001_800, 1_001_835, 10300)
+	ticket5 := ticketer.NewTicket("MANGO", ticketer.RoadID(3), 50, 51, 1_001_800, 1_001_835, 10300)
+
+	tm.AttemptTicketIssue(ticket1)
+	tm.AttemptTicketIssue(ticket2)
+	tm.AttemptTicketIssue(ticket3)
+	tm.AttemptTicketIssue(ticket4)
+	tm.AttemptTicketIssue(ticket5)
+
+	is.Equal(len(tm.SentTickets), 0)                       // expected no sent tickets
+	is.Equal(len(tm.UnsentTickets), 3)                     // expected unsent tickets for 3 roads
+	is.Equal(len(tm.UnsentTickets[ticketer.RoadID(1)]), 2) // expected 2 unsent tickets for road 1
+	is.Equal(len(tm.UnsentTickets[ticketer.RoadID(2)]), 2) // expected 2 unsent tickets for road 2
+	is.Equal(len(tm.UnsentTickets[ticketer.RoadID(3)]), 1) // expected 1 unsent ticket for road 3
+
+	dispatcher1 := &testDispatcher{id: "dispatcher_1", roads: []ticketer.RoadID{1, 2}}
+	tm.AddDispatcher(dispatcher1)
+
+	is.Equal(len(tm.SentTickets), 4)         // expected 4 sent tickets
+	is.Equal(len(tm.UnsentTickets), 1)       // expected unsent tickets for 1 road
+	is.Equal(dispatcher1.sentTicketCount, 4) // expected 4 tickets to be received by dispatcher1
+
+	dispatcher2 := &testDispatcher{id: "dispatcher_2", roads: []ticketer.RoadID{1, 2, 3}}
+	tm.AddDispatcher(dispatcher2)
+
+	is.Equal(len(tm.SentTickets), 5)         // expected 5 sent tickets
+	is.Equal(len(tm.UnsentTickets), 0)       // expected 0 unsent tickets
+	is.Equal(dispatcher1.sentTicketCount, 4) // expected dispatcher1 to still be at 4 tickets
+	is.Equal(dispatcher2.sentTicketCount, 1) // expected 1 ticket to be received by dispatcher2
 }

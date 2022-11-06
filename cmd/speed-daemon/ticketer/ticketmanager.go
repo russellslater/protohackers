@@ -84,40 +84,50 @@ func (t *TicketManager) DetectSpeeding(o1 *Observation, o2 *Observation) (uint16
 }
 
 func (t *TicketManager) AttemptTicketIssue(ticket *Ticket) {
-	// has ticket been issued today for plate?
-	if _, ok := t.SentTickets[ticket.key()]; !ok {
-		if dispatcher := t.LocateDispatcher(ticket.Road); dispatcher != nil {
-			dispatcher.SendTicket(ticket)
-			t.SentTickets[ticket.key()] = ticket
-		} else {
-			t.UnsentTickets[ticket.Road] = append(t.UnsentTickets[ticket.Road], ticket)
-		}
+	if dispatcher := t.LocateDispatcher(ticket.Road); dispatcher != nil {
+		t.issueTicket(dispatcher, ticket)
+	} else {
+		t.UnsentTickets[ticket.Road] = append(t.UnsentTickets[ticket.Road], ticket)
 	}
 }
 
-func (t *TicketManager) HasUnsentTicket(r *Road) *Ticket {
-	// TODO
-	return nil
+func (t *TicketManager) issueTicket(dispatcher Dispatcher, ticket *Ticket) {
+	// TODO: Require locks on functions that send and / or manipulate ticket stores
+	// Has ticket been issued today for plate?
+	if _, ok := t.SentTickets[ticket.key()]; !ok {
+		dispatcher.SendTicket(ticket)
+		t.SentTickets[ticket.key()] = ticket
+	}
+}
+
+func (t *TicketManager) issueUnsentTickets(dispatcher Dispatcher, roadID RoadID) {
+	for _, ticket := range t.UnsentTickets[roadID] {
+		t.issueTicket(dispatcher, ticket)
+	}
+	delete(t.UnsentTickets, roadID)
 }
 
 func (t *TicketManager) AddDispatcher(d Dispatcher) {
-	// associate each Dispatcher with every road its responsible for
-	for _, r := range d.Roads() {
+	// Associate each dispatcher with every road its responsible for
+	for _, roadID := range d.Roads() {
 		found := false
-		for _, dispatcher := range t.Dispatchers[r] {
+		for _, dispatcher := range t.Dispatchers[roadID] {
 			if dispatcher.ID() == d.ID() {
 				found = true
 				break
 			}
 		}
 		if !found {
-			t.Dispatchers[r] = append(t.Dispatchers[r], d)
-			// TODO: any unsent tickets for this road?
+			t.Dispatchers[roadID] = append(t.Dispatchers[roadID], d)
+			t.issueUnsentTickets(d, roadID)
 		}
 	}
 }
 
+// RemoveDispatcher removes the Dispatcher from the TicketManager.
+// It will no longer be issued tickets.
 func (t *TicketManager) RemoveDispatcher(d Dispatcher) {
+	// Disassociate with every road the dispatcher is responsible for
 	for _, r := range d.Roads() {
 		rds := t.Dispatchers[r]
 		for i, dispatcher := range rds {
@@ -130,8 +140,8 @@ func (t *TicketManager) RemoveDispatcher(d Dispatcher) {
 	}
 }
 
+// LocateDispatcher returns the first Dispatcher found for the given RoadID
 func (t *TicketManager) LocateDispatcher(roadID RoadID) Dispatcher {
-	// return first dispatcher found for road
 	if dispatchers, ok := t.Dispatchers[roadID]; ok {
 		for _, d := range dispatchers {
 			return d
