@@ -32,6 +32,18 @@ type dispatcher struct {
 	roads []uint16
 }
 
+func (c *client) isCamera() bool {
+	return c.camera != nil
+}
+
+func (c *client) isDispatcher() bool {
+	return c.dispatcher != nil
+}
+
+func (c *client) isIdentified() bool {
+	return c.isCamera() || c.isDispatcher()
+}
+
 func (c *client) readMsg() (msgType, error) {
 	m, err := c.reader.ReadByte()
 	if err != nil {
@@ -88,6 +100,15 @@ func (c *client) sendHeartbeat() {
 	c.writer.Flush()
 }
 
+func (c *client) sendError(msg string) {
+	if len(msg) <= math.MaxUint8 {
+		c.writer.WriteByte(errorMsg)
+		c.writer.WriteByte(byte(len(msg)))
+		c.writer.WriteString(msg)
+		c.writer.Flush()
+	}
+}
+
 // Starts sending a heartbeat to the client at the defined interval.
 // interval is expected to be in deciseconds (1/10th of a second).
 func (c *client) startHeartbeat(interval uint32) {
@@ -105,4 +126,13 @@ func (c *client) startHeartbeat(interval uint32) {
 			}
 		}
 	}()
+}
+
+func (c *client) stopHeartbeat() {
+	c.heartbeatDoneChan <- true
+	c.heartbeatTicker.Stop()
+}
+
+func (c *client) isHeartbeatEnabled() bool {
+	return c.heartbeatTicker != nil
 }

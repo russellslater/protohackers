@@ -94,9 +94,8 @@ func (s *TicketServer) connect(conn net.Conn) *client {
 func (s *TicketServer) remove(client *client) {
 	defer client.conn.Close()
 
-	if client.heartbeatDoneChan != nil {
-		client.heartbeatDoneChan <- true
-		client.heartbeatTicker.Stop()
+	if client.isHeartbeatEnabled() {
+		client.stopHeartbeat()
 	}
 
 	s.Lock()
@@ -127,6 +126,12 @@ func (s *TicketServer) serve(client *client) error {
 		case iAmCameraMsg:
 			// echo -e -n '\x80\x00\x7b\x00\x08\x00\x3c' > out
 			log.Println("IAmCamera")
+
+			if client.isIdentified() {
+				client.sendError("Already identified")
+				return nil // disconnect gracefully
+			}
+
 			client.camera = &camera{
 				road:  client.readUint16(),
 				mile:  client.readUint16(),
@@ -138,14 +143,24 @@ func (s *TicketServer) serve(client *client) error {
 			// echo -e -n '\x81\x03\x00\x42\x01\x70\x13\x88' > out
 			log.Println("IAmDispatcher")
 
+			if client.isIdentified() {
+				client.sendError("Already identified")
+				return nil // disconnect gracefully
+			}
+
 			client.dispatcher = &dispatcher{
 				roads: client.readUint16Array(),
 			}
 
 			log.Println("Dispatcher: ", client.dispatcher)
 		case plateMsg:
-			// echo -e '\x20\x04\x55\x4e\x31\x58\x00\x00\x03\xe8' > out
+			// echo -e -n '\x20\x04\x55\x4e\x31\x58\x00\x00\x03\xe8' > out
 			log.Println("Plate")
+
+			if !client.isCamera() {
+				client.sendError("Client must identify as camera to observe plate")
+				return nil // disconnect gracefully
+			}
 
 			plate := client.readStr()
 			timestamp := client.readUint32()
@@ -156,6 +171,11 @@ func (s *TicketServer) serve(client *client) error {
 			// echo -e -n '\x40\x00\x00\x04\xdb' > out
 			log.Println("Want Heartbeat")
 
+			if client.isHeartbeatEnabled() {
+				client.sendError("Heartbeat already enabled")
+				return nil // disconnect gracefully
+			}
+
 			interval := client.readUint32()
 
 			client.startHeartbeat(interval)
@@ -163,6 +183,8 @@ func (s *TicketServer) serve(client *client) error {
 			log.Println("Interval: ", interval)
 		default:
 			log.Println("Unknown message")
+			client.sendError("Uknown message")
+			return nil // disconnect gracefully
 		}
 	}
 }
