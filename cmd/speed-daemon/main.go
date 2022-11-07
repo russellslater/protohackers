@@ -2,9 +2,7 @@ package main
 
 import (
 	"bufio"
-	"encoding/binary"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"sync"
@@ -27,82 +25,16 @@ type TicketServer struct {
 
 const (
 	plateMsg         = 0x20
-	ticketMsg        = 0x21
 	wantHeartbeatMsg = 0x40
 	iAmCameraMsg     = 0x80
 	iAmDispatcherMsg = 0x81
+
+	errorMsg     = 0x10
+	ticketMsg    = 0x21
+	heartbeatMsg = 0x41
 )
 
 type msgType uint8
-
-type client struct {
-	addr       string
-	conn       net.Conn
-	reader     *bufio.Reader
-	camera     *camera
-	dispatcher *dispatcher
-}
-
-type camera struct {
-	road  uint16
-	mile  uint16
-	limit uint16
-}
-
-type dispatcher struct {
-	roads []uint16
-}
-
-func (c *client) readMsg() msgType {
-	m, err := c.reader.ReadByte()
-	if err != nil {
-		return 0
-	}
-	return msgType(m)
-}
-
-func (c *client) readUint16() uint16 {
-	var num uint16
-	// TODO: handle errors
-	binary.Read(c.reader, binary.BigEndian, &num)
-	return num
-}
-
-func (c *client) readUint16Array() []uint16 {
-	count, err := c.reader.ReadByte()
-	if err != nil {
-		return []uint16{}
-	}
-
-	arr := make([]uint16, uint8(count))
-	for i := 0; i < len(arr); i++ {
-		arr[i] = c.readUint16()
-	}
-
-	return arr
-}
-
-func (c *client) readUint32() uint32 {
-	var num uint32
-	// TODO: handle errors
-	binary.Read(c.reader, binary.BigEndian, &num)
-	return num
-}
-
-func (c *client) readStr() string {
-	len, err := c.reader.ReadByte()
-	if err != nil {
-		return ""
-	}
-
-	buf := make([]byte, uint8(len))
-	_, err = io.ReadFull(c.reader, buf)
-	if err != nil {
-		return ""
-	}
-
-	return string(buf)
-}
 
 func NewTicketServer(port int) *TicketServer {
 	return &TicketServer{
@@ -147,6 +79,7 @@ func (s *TicketServer) connect(conn net.Conn) *client {
 		addr:   conn.RemoteAddr().String(),
 		conn:   conn,
 		reader: bufio.NewReader(conn),
+		writer: bufio.NewWriter(conn),
 	}
 
 	s.Lock()
@@ -159,6 +92,13 @@ func (s *TicketServer) connect(conn net.Conn) *client {
 }
 
 func (s *TicketServer) remove(client *client) {
+	defer client.conn.Close()
+
+	if client.heartbeatDoneChan != nil {
+		client.heartbeatDoneChan <- true
+		client.heartbeatTicker.Stop()
+	}
+
 	s.Lock()
 	for i, c := range s.clients {
 		if client == c {
@@ -170,8 +110,6 @@ func (s *TicketServer) remove(client *client) {
 	s.Unlock()
 
 	log.Printf("connection from %s closed [# connected clients: %d]\n", client.addr, len(s.clients))
-
-	client.conn.Close()
 }
 
 func (s *TicketServer) serve(client *client) error {
@@ -180,7 +118,12 @@ func (s *TicketServer) serve(client *client) error {
 	log.Printf("incoming connection: %v\n", client.conn)
 
 	for {
-		switch client.readMsg() {
+		msg, err := client.readMsg()
+		if err != nil {
+			return err
+		}
+
+		switch msg {
 		case iAmCameraMsg:
 			// echo -e -n '\x80\x00\x7b\x00\x08\x00\x3c' > out
 			log.Println("IAmCamera")
@@ -214,6 +157,8 @@ func (s *TicketServer) serve(client *client) error {
 			log.Println("Want Heartbeat")
 
 			interval := client.readUint32()
+
+			client.startHeartbeat(interval)
 
 			log.Println("Interval: ", interval)
 		default:
