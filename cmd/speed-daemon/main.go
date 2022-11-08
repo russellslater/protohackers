@@ -62,7 +62,7 @@ func (s *TicketServer) Start() error {
 
 		go func() {
 			if err := s.serve(client); err != nil {
-				fmt.Println(err.Error())
+				log.Println(err.Error())
 			}
 		}()
 	}
@@ -97,6 +97,8 @@ func (s *TicketServer) remove(client *client) {
 	if client.isHeartbeatEnabled() {
 		client.stopHeartbeat()
 	}
+
+	s.ticketManager.RemoveDispatcher(client)
 
 	s.Lock()
 	for i, c := range s.clients {
@@ -148,9 +150,9 @@ func (s *TicketServer) serve(client *client) error {
 				return nil // disconnect gracefully
 			}
 
-			client.dispatcher = &dispatcher{
-				roads: client.readUint16Array(),
-			}
+			client.dispatcher = &dispatcher{roads: client.readUint16Array()}
+
+			s.ticketManager.AddDispatcher(client)
 
 			log.Println("Dispatcher: ", client.dispatcher)
 		case plateMsg:
@@ -165,6 +167,17 @@ func (s *TicketServer) serve(client *client) error {
 			plate := client.readStr()
 			timestamp := client.readUint32()
 
+			ob := &ticketer.Observation{
+				Road: &ticketer.Road{
+					ID:    ticketer.RoadID(client.camera.road),
+					Limit: client.camera.limit,
+				},
+				Mile:      client.camera.mile,
+				Plate:     plate,
+				Timestamp: timestamp,
+			}
+			s.ticketManager.Observe(ob)
+
 			log.Println("Plate: ", plate)
 			log.Println("Timestamp: ", timestamp)
 		case wantHeartbeatMsg:
@@ -178,9 +191,9 @@ func (s *TicketServer) serve(client *client) error {
 
 			interval := client.readUint32()
 
-			client.startHeartbeat(interval)
+			log.Println("Interval:", interval)
 
-			log.Println("Interval: ", interval)
+			client.startHeartbeat(interval)
 		default:
 			log.Println("Unknown message")
 			client.sendError("Uknown message")

@@ -8,6 +8,8 @@ import (
 	"math"
 	"net"
 	"time"
+
+	"github.com/russellslater/protohackers/cmd/speed-daemon/ticketer"
 )
 
 type client struct {
@@ -30,6 +32,35 @@ type camera struct {
 
 type dispatcher struct {
 	roads []uint16
+}
+
+func (c *client) ID() string {
+	return c.addr
+}
+
+func (c *client) Roads() []ticketer.RoadID {
+	if c.isDispatcher() {
+		roadIDs := make([]ticketer.RoadID, len(c.dispatcher.roads))
+		for i := range c.dispatcher.roads {
+			roadIDs[i] = ticketer.RoadID(c.dispatcher.roads[i])
+		}
+		return roadIDs
+	}
+	return []ticketer.RoadID{}
+}
+
+func (c *client) SendTicket(t *ticketer.Ticket) {
+	if c.isDispatcher() {
+		c.writer.WriteByte(ticketMsg)
+		c.writeString(t.Plate)
+		c.writeUint16(uint16(t.Road))
+		c.writeUint16(t.MileStart)
+		c.writeUint32(t.TimestampStart)
+		c.writeUint16(t.MileEnd)
+		c.writeUint32(t.TimestampEnd)
+		c.writeUint16(t.Speed)
+		c.writer.Flush()
+	}
 }
 
 func (c *client) isCamera() bool {
@@ -95,6 +126,23 @@ func (c *client) readStr() string {
 	return string(buf)
 }
 
+func (c *client) writeUint16(i uint16) {
+	b := make([]byte, 2)
+	binary.BigEndian.PutUint16(b, i)
+	c.writer.Write(b)
+}
+
+func (c *client) writeUint32(i uint32) {
+	b := make([]byte, 4)
+	binary.BigEndian.PutUint32(b, i)
+	c.writer.Write(b)
+}
+
+func (c *client) writeString(str string) {
+	c.writer.WriteByte(byte(len(str)))
+	c.writer.WriteString(str)
+}
+
 func (c *client) sendHeartbeat() {
 	c.writer.WriteByte(heartbeatMsg)
 	c.writer.Flush()
@@ -103,8 +151,7 @@ func (c *client) sendHeartbeat() {
 func (c *client) sendError(msg string) {
 	if len(msg) <= math.MaxUint8 {
 		c.writer.WriteByte(errorMsg)
-		c.writer.WriteByte(byte(len(msg)))
-		c.writer.WriteString(msg)
+		c.writeString(msg)
 		c.writer.Flush()
 	}
 }
