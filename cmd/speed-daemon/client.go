@@ -159,6 +159,10 @@ func (c *client) sendError(msg string) {
 // Starts sending a heartbeat to the client at the defined interval.
 // interval is expected to be in deciseconds (1/10th of a second).
 func (c *client) startHeartbeat(interval uint32) {
+	if interval == 0 {
+		return
+	}
+
 	c.heartbeatTicker = time.NewTicker(time.Duration(interval*100) * time.Millisecond)
 	c.heartbeatDoneChan = make(chan bool)
 
