@@ -15,18 +15,9 @@ type Ticket struct {
 	Speed          uint16 // 100x mile per hour
 }
 
-type ticketKey struct {
-	plate string
-	day   int
-}
-
-func (t *Ticket) key() ticketKey {
-	return ticketKey{plate: t.Plate, day: t.StartDay()}
-}
-
 func (t *Ticket) String() string {
-	return fmt.Sprintf("{P: %s, R: %d, M0: %d, M1: %d, M0: %d, M1: %d, S: %d}",
-		t.Plate, t.Road, t.MileStart, t.MileEnd, t.TimestampStart, t.TimestampEnd, t.Speed)
+	return fmt.Sprintf("Ticket for %s (road=%d, mm1=%d, ts1=%d, mm2=%d, ts2=%d, speed=%d]\n",
+		t.Plate, t.Road, t.MileStart, t.TimestampStart, t.MileEnd, t.TimestampEnd, t.Speed/100)
 }
 
 func NewTicket(plate string, road RoadID, mileStart uint16, mileEnd uint16, timestampStart uint32, timestampEnd uint32, speed uint16) *Ticket {
@@ -49,6 +40,10 @@ func (t *Ticket) EndDay() int {
 	return int(math.Floor(float64(t.TimestampEnd) / float64(86400)))
 }
 
-func (t *Ticket) DayDiff() int {
-	return t.StartDay() - t.EndDay()
+func (t *Ticket) SpannedDays() []int {
+	spannedDays := []int{}
+	for i := t.StartDay(); i <= t.EndDay(); i++ {
+		spannedDays = append(spannedDays, i)
+	}
+	return spannedDays
 }

@@ -2,21 +2,25 @@ package ticketer
 
 import (
 	"math"
+	"sync"
 )
 
 type TicketManager struct {
-	Observations  map[observationKey][]*Observation
-	Dispatchers   map[RoadID][]Dispatcher
-	SentTickets   map[ticketKey]*Ticket
-	UnsentTickets map[RoadID][]*Ticket
+	Observations     map[observationKey][]*Observation
+	Dispatchers      map[RoadID][]Dispatcher
+	TicketIssuedDays map[string]map[int]bool
+	UnsentTickets    map[RoadID][]*Ticket
+	SentTickets      []*Ticket
+	sync.Mutex
 }
 
 func NewTicketManager() *TicketManager {
 	return &TicketManager{
-		Observations:  map[observationKey][]*Observation{},
-		Dispatchers:   map[RoadID][]Dispatcher{},
-		SentTickets:   map[ticketKey]*Ticket{},
-		UnsentTickets: map[RoadID][]*Ticket{},
+		Observations:     map[observationKey][]*Observation{},
+		Dispatchers:      map[RoadID][]Dispatcher{},
+		TicketIssuedDays: map[string]map[int]bool{},
+		UnsentTickets:    map[RoadID][]*Ticket{},
+		SentTickets:      []*Ticket{},
 	}
 }
 
@@ -90,24 +94,46 @@ func (t *TicketManager) AttemptTicketIssue(ticket *Ticket) {
 	if dispatcher := t.LocateDispatcher(ticket.Road); dispatcher != nil {
 		t.issueTicket(dispatcher, ticket)
 	} else {
+		t.Lock()
 		t.UnsentTickets[ticket.Road] = append(t.UnsentTickets[ticket.Road], ticket)
+		t.Unlock()
 	}
 }
 
 func (t *TicketManager) issueTicket(dispatcher Dispatcher, ticket *Ticket) {
-	// TODO: Require locks on functions that send and / or manipulate ticket stores
-	// Has ticket been issued today for plate?
-	if _, ok := t.SentTickets[ticket.key()]; !ok {
-		dispatcher.SendTicket(ticket)
-		t.SentTickets[ticket.key()] = ticket
+	t.Lock()
+	defer t.Unlock()
+
+	// Has a ticket already been issued for at least one of the days spanned by the ticket?
+	issuedDays, found := t.TicketIssuedDays[ticket.Plate]
+
+	if found {
+		for _, day := range ticket.SpannedDays() {
+			if issuedDays[day] {
+				return // Already issued!
+			}
+		}
+	} else {
+		t.TicketIssuedDays[ticket.Plate] = map[int]bool{}
 	}
+
+	// Record span of days for ticket
+	for _, day := range ticket.SpannedDays() {
+		t.TicketIssuedDays[ticket.Plate][day] = true
+	}
+
+	t.SentTickets = append(t.SentTickets, ticket)
+
+	dispatcher.SendTicket(ticket)
 }
 
 func (t *TicketManager) issueUnsentTickets(dispatcher Dispatcher, roadID RoadID) {
 	for _, ticket := range t.UnsentTickets[roadID] {
 		t.issueTicket(dispatcher, ticket)
 	}
+	t.Lock()
 	delete(t.UnsentTickets, roadID)
+	t.Unlock()
 }
 
 func (t *TicketManager) AddDispatcher(d Dispatcher) {

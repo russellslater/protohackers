@@ -780,7 +780,62 @@ func TestObserveWillAttemptToIssuesTickets(t *testing.T) {
 	tm.Observe(observation1Road2)
 	tm.Observe(observation2Road2)
 
-	// no ticket after single observation
 	is.Equal(len(tm.SentTickets), 1)   // expected no more sent tickets
 	is.Equal(len(tm.UnsentTickets), 1) // expected 1 unsent ticket
+}
+
+func TestMultiDayScenario(t *testing.T) {
+	is := is.New(t)
+
+	tm := ticketer.NewTicketManager()
+
+	road := &ticketer.Road{ID: ticketer.RoadID(18452), Limit: 50}
+	plate := "CT77YVD"
+
+	dispatcher1 := &testDispatcher{id: "dispatcher_1", roads: []ticketer.RoadID{road.ID}}
+	tm.AddDispatcher(dispatcher1)
+
+	// Car speeding consistently at ~62 mph. Every combination of observations is a possible
+	// ticket. The days over which a ticket spans cannot overlap with the span of another
+	// ticket. First ticket will span Day 812 and 813 and should issue after the first pair
+	// of observations. No other tickets should be issued.
+	observations := []*ticketer.Observation{
+		{Road: road, Mile: 351, Plate: plate, Timestamp: 70233988}, // Day 812
+		{Road: road, Mile: 650, Plate: plate, Timestamp: 70251461}, // Day 813
+		{Road: road, Mile: 460, Plate: plate, Timestamp: 70240358}, // Day 812
+		{Road: road, Mile: 905, Plate: plate, Timestamp: 70266363}, // Day 813
+	}
+
+	for _, o := range observations {
+		tm.Observe(o)
+	}
+
+	is.Equal(dispatcher1.sentTicketCount, 1) // expected 1 sent ticket
+}
+
+func TestAnotherTicketScenario(t *testing.T) {
+	is := is.New(t)
+
+	tm := ticketer.NewTicketManager()
+
+	road := &ticketer.Road{ID: ticketer.RoadID(25958), Limit: 45}
+	plate := "NN90MLU"
+
+	dispatcher1 := &testDispatcher{id: "dispatcher_1", roads: []ticketer.RoadID{road.ID}}
+	tm.AddDispatcher(dispatcher1)
+
+	observations := []*ticketer.Observation{
+		{Road: road, Mile: 183, Plate: plate, Timestamp: 45343155}, // Day 524
+		{Road: road, Mile: 423, Plate: plate, Timestamp: 45330449}, // Day 524
+		{Road: road, Mile: 345, Plate: plate, Timestamp: 45361060}, // Day 525
+		{Road: road, Mile: 631, Plate: plate, Timestamp: 45371356}, // Day 525
+		{Road: road, Mile: 130, Plate: plate, Timestamp: 45353320}, // Day 524
+		{Road: road, Mile: 938, Plate: plate, Timestamp: 45382408}, // Day 525
+	}
+
+	for _, o := range observations {
+		tm.Observe(o)
+	}
+
+	is.Equal(dispatcher1.sentTicketCount, 2) // expected 2 sent tickets
 }
