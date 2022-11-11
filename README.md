@@ -8,6 +8,7 @@ A collection of my solutions for the server programming challenge at https://pro
 - Budget Chat: https://protohackers.com/problem/3
 - Unusual Database Program: https://protohackers.com/problem/4
 - Mob in the Middle: https://protohackers.com/problem/5
+- Speed Daemon: https://protohackers.com/problem/6
 
 ## Instructions
 Building a solution's Docker image (`smoke-test` in this example) and testing locally ...
@@ -51,3 +52,40 @@ You can now test UDP with Netcat using the `-u` flag ...
 nc -u localhost 5000
 ```
 Note that `^D` / `CTRL+D` will send `EOF`.
+
+## Testing Speed Daemon
+This could be tested locally by first creating a couple of named pipes (multiple pairs to test multiple simultaneous clients) ...
+```
+mkfifo out
+mkfifo in
+```
+Making use of the pipes after starting the server ...
+```
+nc localhost 5000 <out >in &; cat > out
+```
+Sending commands from another terminal window ...
+```
+echo -e -n '\x80\x00\x7b\x00\x08\x00\x3c' > out # IAmCamera
+echo -e -n '\x81\x03\x00\x42\x01\x70\x13\x88' > out # IAmDispatcher
+echo -e -n '\x20\x04\x55\x4e\x31\x58\x00\x00\x03\xe8' > out # Plate
+echo -e -n '\x40\x00\x00\x00\x0a' > out # WantHeartbeat
+```
+The `-n` flag will prevent trailing newlines from being sent, and the `-e` flag allows us to use hex notation.
+
+And watching for the responses in yet another terminal window ...
+```
+cat in
+```
+A short example scenario with 3 connected clients ...
+```
+# Client 1: camera at mile 8
+echo -e -n '\x80\x00\x7b\x00\x08\x00\x3c' > out # IAmCamera{road: 123, mile: 8, limit: 60}
+echo -e -n '\x20\x04\x55\x4e\x31\x58\x00\x00\x00\x00' > out # Plate{plate: "UN1X", timestamp: 0}
+
+# Client 2: camera at mile 9
+echo -e -n '\x80\x00\x7b\x00\x09\x00\x3c' > out2 # IAmCamera{road: 123, mile: 9, limit: 60}
+echo -e -n '\x20\x04\x55\x4e\x31\x58\x00\x00\x00\x2d' > out2 # Plate{plate: "UN1X", timestamp: 45}
+
+# Client 3: ticket dispatcher (should receive a ticket after identifying)
+echo -e -n '\x81\x01\x00\x7b' > out3 # IAmDispatcher{roads: [123]}
+```
