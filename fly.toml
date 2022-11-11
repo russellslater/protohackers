@@ -13,3 +13,8 @@ app = "winter-cloud-2400"
 
   [[services.ports]]
     port = "5000"
+
+  [services.concurrency]
+    type = "connections"
+    hard_limit = 200
+    soft_limit = 150
