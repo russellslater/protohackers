@@ -3,8 +3,8 @@ package main
 import (
 	"bufio"
 	"encoding/binary"
-	"fmt"
 	"io"
+	"log"
 	"math"
 	"net"
 	"time"
@@ -51,6 +51,8 @@ func (c *client) Roads() []ticketer.RoadID {
 
 func (c *client) SendTicket(t *ticketer.Ticket) {
 	if c.isDispatcher() {
+		log.Printf("%v\n", t)
+
 		c.writer.WriteByte(ticketMsg)
 		c.writeString(t.Plate)
 		c.writeUint16(uint16(t.Road))
@@ -171,8 +173,7 @@ func (c *client) startHeartbeat(interval uint32) {
 			select {
 			case <-c.heartbeatDoneChan:
 				return
-			case t := <-c.heartbeatTicker.C:
-				fmt.Println("Tick at", t)
+			case <-c.heartbeatTicker.C:
 				c.sendHeartbeat()
 			}
 		}

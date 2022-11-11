@@ -126,9 +126,6 @@ func (s *TicketServer) serve(client *client) error {
 
 		switch msg {
 		case iAmCameraMsg:
-			// echo -e -n '\x80\x00\x7b\x00\x08\x00\x3c' > out
-			log.Println("IAmCamera")
-
 			if client.isIdentified() {
 				client.sendError("Already identified")
 				return nil // disconnect gracefully
@@ -140,11 +137,8 @@ func (s *TicketServer) serve(client *client) error {
 				limit: client.readUint16(),
 			}
 
-			log.Println("Camera: ", client.camera)
+			log.Printf("Camera: %v\n", client.camera)
 		case iAmDispatcherMsg:
-			// echo -e -n '\x81\x03\x00\x42\x01\x70\x13\x88' > out
-			log.Println("IAmDispatcher")
-
 			if client.isIdentified() {
 				client.sendError("Already identified")
 				return nil // disconnect gracefully
@@ -152,13 +146,10 @@ func (s *TicketServer) serve(client *client) error {
 
 			client.dispatcher = &dispatcher{roads: client.readUint16Array()}
 
+			log.Printf("Dispatcher: %v\n", client.dispatcher)
+
 			s.ticketManager.AddDispatcher(client)
-
-			log.Println("Dispatcher: ", client.dispatcher)
 		case plateMsg:
-			// echo -e -n '\x20\x04\x55\x4e\x31\x58\x00\x00\x03\xe8' > out
-			log.Println("Plate")
-
 			if !client.isCamera() {
 				client.sendError("Client must identify as camera to observe plate")
 				return nil // disconnect gracefully
@@ -176,14 +167,11 @@ func (s *TicketServer) serve(client *client) error {
 				Plate:     plate,
 				Timestamp: timestamp,
 			}
+
+			log.Printf("Observation: %v\n", ob)
+
 			s.ticketManager.Observe(ob)
-
-			log.Println("Plate: ", plate)
-			log.Println("Timestamp: ", timestamp)
 		case wantHeartbeatMsg:
-			// echo -e -n '\x40\x00\x00\x04\xdb' > out
-			log.Println("Want Heartbeat")
-
 			if client.isHeartbeatEnabled() {
 				client.sendError("Heartbeat already enabled")
 				return nil // disconnect gracefully
@@ -191,12 +179,9 @@ func (s *TicketServer) serve(client *client) error {
 
 			interval := client.readUint32()
 
-			log.Println("Interval:", interval)
-
 			client.startHeartbeat(interval)
 		default:
-			log.Println("Unknown message")
-			client.sendError("Uknown message")
+			client.sendError("Unknown message")
 			return nil // disconnect gracefully
 		}
 	}
