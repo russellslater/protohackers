@@ -9,6 +9,7 @@ A collection of my solutions for the server programming challenge at https://pro
 - Unusual Database Program: https://protohackers.com/problem/4
 - Mob in the Middle: https://protohackers.com/problem/5
 - Speed Daemon: https://protohackers.com/problem/6
+- Line Reversal: https://protohackers.com/problem/7
 
 ## Instructions
 Building a solution's Docker image (`smoke-test` in this example) and testing locally ...
