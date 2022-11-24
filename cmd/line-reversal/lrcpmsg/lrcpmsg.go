@@ -12,6 +12,7 @@ var (
 	connectMsgRegex, _ = regexp.Compile(`^/connect/(?P<SessionID>\d{1,10})/$`)
 	closeMsgRegex, _   = regexp.Compile(`^/close/(?P<SessionID>\d{1,10})/$`)
 	ackMsgRegex, _     = regexp.Compile(`^/ack/(?P<SessionID>\d{1,10})/(?P<Length>\d{1,10})/$`)
+	dataMsgRegex, _    = regexp.Compile(`^\/data\/(?P<SessionID>\d{1,10})\/(?P<Pos>\d{1,10})\/(?s)(?P<Data>.+)\/$`)
 )
 
 type ConnectMsg struct {
@@ -54,7 +55,7 @@ func ParseMsg(msg []byte) (interface{}, error) {
 		var err error
 
 		regexResult := connectMsgRegex.FindSubmatch(msg)
-		if len(regexResult) > 1 {
+		if len(regexResult) == 2 {
 			sessionID, err = parseNumericField(string(regexResult[1]))
 			if err != nil {
 				return nil, err
@@ -69,7 +70,7 @@ func ParseMsg(msg []byte) (interface{}, error) {
 		var err error
 
 		regexResult := closeMsgRegex.FindSubmatch(msg)
-		if len(regexResult) > 1 {
+		if len(regexResult) == 2 {
 			sessionID, err = parseNumericField(string(regexResult[1]))
 			if err != nil {
 				return nil, err
@@ -85,7 +86,7 @@ func ParseMsg(msg []byte) (interface{}, error) {
 
 		regexResult := ackMsgRegex.FindSubmatch(msg)
 
-		if len(regexResult) > 1 {
+		if len(regexResult) == 3 {
 			sessionID, err = parseNumericField(string(regexResult[1]))
 			if err != nil {
 				return nil, err
@@ -99,6 +100,28 @@ func ParseMsg(msg []byte) (interface{}, error) {
 		}
 
 		return AckMsg{sessionID, length}, nil
+	case bytes.HasPrefix(msg, []byte("/data")):
+		sessionID, pos := 0, 0
+		var data []byte
+		var err error
+
+		regexResult := dataMsgRegex.FindSubmatch(msg)
+
+		if len(regexResult) == 4 {
+			sessionID, err = parseNumericField(string(regexResult[1]))
+			if err != nil {
+				return nil, err
+			}
+			pos, err = parseNumericField(string(regexResult[2]))
+			if err != nil {
+				return nil, err
+			}
+			data = regexResult[3]
+		} else {
+			return nil, fmt.Errorf("invalid message format")
+		}
+
+		return DataMsg{sessionID, pos, data}, nil
 	}
 
 	return nil, nil

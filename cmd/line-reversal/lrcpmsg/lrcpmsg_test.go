@@ -179,6 +179,66 @@ func TestParseMsg(t *testing.T) {
 			nil,
 			fmt.Errorf("invalid message format"),
 		},
+		{
+			"Input is a valid ack message",
+			[]byte("/data/12345/0/Hello, world!\n/"),
+			lrcpmsg.DataMsg{12345, 0, []byte("Hello, world!\n")},
+			nil,
+		},
+		{
+			"Input is a data message with the largest possible session ID and pos",
+			[]byte("/data/2147483647/2147483647/abcdefg/"),
+			lrcpmsg.DataMsg{2147483647, 2147483647, []byte("abcdefg")},
+			nil,
+		},
+		{
+			"Input is a data message with empty data",
+			[]byte("/data/1234/10//"),
+			nil,
+			fmt.Errorf("invalid message format"),
+		},
+		{
+			"Input is a data message with a session ID and pos of 0",
+			[]byte(`/data/0/0/foo\/bar\\baz/`),
+			lrcpmsg.DataMsg{0, 0, []byte(`foo\/bar\\baz`)},
+			nil,
+		},
+		{
+			"Input is a data message with an invalid session ID",
+			[]byte("/data/1a2b3c/1234/Hello/"),
+			nil,
+			fmt.Errorf("invalid message format"),
+		},
+		{
+			"Input is a data message with an invalid pos",
+			[]byte("/data/1234/1a2b3c/Hello/"),
+			nil,
+			fmt.Errorf("invalid message format"),
+		},
+		{
+			"Input is a data message with a session ID larger than the permitted max",
+			[]byte("/data/2147483648/1234/Hello, World!/"),
+			nil,
+			fmt.Errorf("numeric field exceeds maximum numeric value"),
+		},
+		{
+			"Input is a data message with a pos larger than the permitted max",
+			[]byte("/data/1234/2147483648/Hello, World!/"),
+			nil,
+			fmt.Errorf("numeric field exceeds maximum numeric value"),
+		},
+		{
+			"Input is a data message with a negative integer for a session ID",
+			[]byte("/data/-1000/1234/Hello, World!/"),
+			nil,
+			fmt.Errorf("invalid message format"),
+		},
+		{
+			"Input is a data message with a negative integer for a pos",
+			[]byte("/data/1234/-1000/Hello, World!/"),
+			nil,
+			fmt.Errorf("invalid message format"),
+		},
 	}
 
 	for _, tc := range tt {
