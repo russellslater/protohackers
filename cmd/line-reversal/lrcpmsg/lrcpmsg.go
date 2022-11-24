@@ -10,6 +10,8 @@ import (
 
 var (
 	connectMsgRegex, _ = regexp.Compile(`^/connect/(?P<SessionID>\d{1,10})/$`)
+	closeMsgRegex, _   = regexp.Compile(`^/close/(?P<SessionID>\d{1,10})/$`)
+	ackMsgRegex, _     = regexp.Compile(`^/ack/(?P<SessionID>\d{1,10})/(?P<Length>\d{1,10})/$`)
 )
 
 type ConnectMsg struct {
@@ -53,21 +55,65 @@ func ParseMsg(msg []byte) (interface{}, error) {
 
 		regexResult := connectMsgRegex.FindSubmatch(msg)
 		if len(regexResult) > 1 {
-			sessionID, err = strconv.Atoi(string(regexResult[1]))
-
+			sessionID, err = parseNumericField(string(regexResult[1]))
 			if err != nil {
-				return nil, fmt.Errorf("invalid message format")
-			}
-
-			if sessionID > math.MaxInt32 {
-				return nil, fmt.Errorf("session ID exceeds maximum numeric value")
+				return nil, err
 			}
 		} else {
 			return nil, fmt.Errorf("invalid message format")
 		}
 
 		return ConnectMsg{sessionID}, nil
+	case bytes.HasPrefix(msg, []byte("/close")):
+		sessionID := 0
+		var err error
+
+		regexResult := closeMsgRegex.FindSubmatch(msg)
+		if len(regexResult) > 1 {
+			sessionID, err = parseNumericField(string(regexResult[1]))
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, fmt.Errorf("invalid message format")
+		}
+
+		return CloseMsg{sessionID}, nil
+	case bytes.HasPrefix(msg, []byte("/ack")):
+		sessionID, length := 0, 0
+		var err error
+
+		regexResult := ackMsgRegex.FindSubmatch(msg)
+
+		if len(regexResult) > 1 {
+			sessionID, err = parseNumericField(string(regexResult[1]))
+			if err != nil {
+				return nil, err
+			}
+			length, err = parseNumericField(string(regexResult[2]))
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, fmt.Errorf("invalid message format")
+		}
+
+		return AckMsg{sessionID, length}, nil
 	}
 
 	return nil, nil
+}
+
+func parseNumericField(numStr string) (int, error) {
+	num, err := strconv.Atoi(numStr)
+
+	if err != nil {
+		return 0, fmt.Errorf("invalid message format")
+	}
+
+	if num > math.MaxInt32 {
+		return 0, fmt.Errorf("numeric field exceeds maximum numeric value")
+	}
+
+	return num, nil
 }
