@@ -15,6 +15,10 @@ var (
 	dataMsgRegex, _    = regexp.Compile(`^\/data\/(?P<SessionID>\d{1,10})\/(?P<Pos>\d{1,10})\/(?s)(?P<Data>.+)\/$`)
 )
 
+type Msg interface {
+	String() string
+}
+
 type ConnectMsg struct {
 	SessionID int
 }
@@ -30,8 +34,16 @@ type AckMsg struct {
 	Length    int
 }
 
+func (a AckMsg) String() string {
+	return fmt.Sprintf("/ack/%d/%d/", a.SessionID, a.Length)
+}
+
 type CloseMsg struct {
 	SessionID int
+}
+
+func (c CloseMsg) String() string {
+	return fmt.Sprintf("/close/%d/", c.SessionID)
 }
 
 // Packet contents must begin with a forward slash, end with a forward slash,

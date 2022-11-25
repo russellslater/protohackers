@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"sync"
 
 	"github.com/russellslater/protohackers/cmd/line-reversal/lrcpmsg"
 )
@@ -34,15 +35,18 @@ func main() {
 }
 
 type LineReversalServer struct {
-	port int
-	host string
-	conn *net.UDPConn
+	port     int
+	host     string
+	conn     *net.UDPConn
+	sessions map[int]*Session
+	sync.Mutex
 }
 
 func NewLineReversalServer(port int, host string) *LineReversalServer {
 	return &LineReversalServer{
-		port: port,
-		host: host,
+		port:     port,
+		host:     host,
+		sessions: make(map[int]*Session),
 	}
 }
 
@@ -67,6 +71,26 @@ func (s *LineReversalServer) Start() error {
 
 func (s *LineReversalServer) Close() {
 	s.conn.Close()
+}
+
+func (s *LineReversalServer) openSession(sid int, addr *net.UDPAddr) *Session {
+	s.Lock()
+	defer s.Unlock()
+
+	session, ok := s.sessions[sid]
+	if ok {
+		return session
+	}
+
+	session = &Session{
+		ID:     sid,
+		Addr:   addr,
+		IsOpen: true,
+	}
+
+	s.sessions[sid] = session
+
+	return session
 }
 
 func (s *LineReversalServer) handleUDP() {
@@ -95,7 +119,12 @@ func (s *LineReversalServer) handleUDP() {
 
 		switch res := result.(type) {
 		case lrcpmsg.ConnectMsg:
-			response = fmt.Sprintf("Connect - Session ID: %d\n", res.SessionID)
+			session := s.openSession(res.SessionID, addr)
+			if session.IsOpen {
+				s.sendAckMessage(session)
+			} else {
+				s.sendCloseMessage(session)
+			}
 		case lrcpmsg.DataMsg:
 			response = fmt.Sprintf("Data - SessionID: %d, Pos: %d, %v\n", res.SessionID, res.Pos, res.Data)
 		case lrcpmsg.AckMsg:
@@ -104,9 +133,25 @@ func (s *LineReversalServer) handleUDP() {
 			response = fmt.Sprintf("Close - Session ID: %d\n", res.SessionID)
 		}
 
+		log.Println(response)
+
 		if response != "" {
-			log.Printf("sending %d bytes over UDP to %v: %s", len(response), addr, response)
-			s.conn.WriteToUDP([]byte(response), addr)
+			log.Printf("sending %d bytes over UDP to %v: %s", len(fmt.Sprintf("%v", response)), addr, response)
+			s.conn.WriteToUDP([]byte(fmt.Sprintf("%v", response)), addr)
 		}
 	}
+}
+
+func (s *LineReversalServer) sendCloseMessage(session *Session) {
+	s.sendMessage(session, lrcpmsg.CloseMsg{SessionID: session.ID})
+}
+
+func (s *LineReversalServer) sendAckMessage(session *Session) {
+	ack := lrcpmsg.AckMsg{SessionID: session.ID, Length: session.ReceivedPos}
+	s.sendMessage(session, ack)
+}
+
+func (s *LineReversalServer) sendMessage(session *Session, msg lrcpmsg.Msg) {
+	log.Printf("sending %d bytes over UDP to %v: %s", len(fmt.Sprintf("%v", msg)), session.Addr, msg)
+	s.conn.WriteToUDP([]byte(fmt.Sprintf("%v", msg)), session.Addr)
 }
