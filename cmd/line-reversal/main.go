@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
 	"log"
 	"net"
 	"os"
+
+	"github.com/russellslater/protohackers/cmd/line-reversal/lrcpmsg"
 )
 
 func main() {
@@ -81,12 +84,29 @@ func (s *LineReversalServer) handleUDP() {
 
 		log.Printf("received %d bytes over UDP from %v: %s", n, addr, buf[:n])
 
-		// TODO: do something
-		result := ""
+		result, err := lrcpmsg.ParseMsg(bytes.Trim(buf[:n], "\x00"))
 
-		if result != "" {
-			log.Printf("sending %d bytes over UDP to %v: %s", len(result), addr, result)
-			s.conn.WriteToUDP([]byte(result), addr)
+		if err != nil {
+			log.Printf("Error: %v\n", err)
+			continue
+		}
+
+		var response string
+
+		switch res := result.(type) {
+		case lrcpmsg.ConnectMsg:
+			response = fmt.Sprintf("Connect - Session ID: %d\n", res.SessionID)
+		case lrcpmsg.DataMsg:
+			response = fmt.Sprintf("Data - SessionID: %d, Pos: %d, %v\n", res.SessionID, res.Pos, res.Data)
+		case lrcpmsg.AckMsg:
+			response = fmt.Sprintf("Ack - Session ID: %d, Length: %d\n", res.SessionID, res.Length)
+		case lrcpmsg.CloseMsg:
+			response = fmt.Sprintf("Close - Session ID: %d\n", res.SessionID)
+		}
+
+		if response != "" {
+			log.Printf("sending %d bytes over UDP to %v: %s", len(response), addr, response)
+			s.conn.WriteToUDP([]byte(response), addr)
 		}
 	}
 }
