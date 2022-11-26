@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/russellslater/protohackers/cmd/line-reversal/lrcpmsg"
+	"github.com/russellslater/protohackers/cmd/line-reversal/util"
 )
 
 func main() {
@@ -93,6 +94,10 @@ func (s *LineReversalServer) openSession(sid int, addr *net.UDPAddr) *Session {
 	return session
 }
 
+func (s *LineReversalServer) findSession(sid int) *Session {
+	return s.sessions[sid]
+}
+
 func (s *LineReversalServer) closeSession(sid int) *Session {
 	s.Lock()
 	defer s.Unlock()
@@ -139,7 +144,7 @@ func (s *LineReversalServer) handleUDP() {
 				s.sendCloseMessage(session)
 			}
 		case lrcpmsg.DataMsg:
-			response = fmt.Sprintf("Data - SessionID: %d, Pos: %d, %v\n", res.SessionID, res.Pos, res.Data)
+			s.handleData(res)
 		case lrcpmsg.AckMsg:
 			response = fmt.Sprintf("Ack - Session ID: %d, Length: %d\n", res.SessionID, res.Length)
 		case lrcpmsg.CloseMsg:
@@ -155,6 +160,33 @@ func (s *LineReversalServer) handleUDP() {
 			log.Printf("sending %d bytes over UDP to %v: %s", len(fmt.Sprintf("%v", response)), addr, response)
 			s.conn.WriteToUDP([]byte(fmt.Sprintf("%v", response)), addr)
 		}
+	}
+}
+
+func (s *LineReversalServer) handleData(msg lrcpmsg.DataMsg) {
+	session := s.findSession(msg.SessionID)
+	if session == nil {
+		return
+	}
+
+	if !session.IsOpen {
+		s.sendCloseMessage(session)
+	}
+
+	log.Printf("Session - ID: %d, ReceivedPos: %d\n", session.ID, session.ReceivedPos)
+	log.Printf("Data - Pos: %d, %v\n", msg.Pos, msg.Data)
+
+	if session.ReceivedPos == msg.Pos {
+		data := util.SlashUnescape(string(msg.Data))
+		log.Printf("Unescaped: %s\n", data)
+
+		session.ReceivedPos += len(data)
+		s.sendAckMessage(session)
+
+		// TODO: detect lines and pass to application layer for reversal
+		// TODO: ... the send back
+	} else if session.ReceivedPos < msg.Pos {
+		s.sendAckMessage(session)
 	}
 }
 

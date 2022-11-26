@@ -1,4 +1,8 @@
-package reverse
+package util
+
+import (
+	"strings"
+)
 
 func Reverse(arr []byte) []byte {
 	if arr == nil {
@@ -13,5 +17,11 @@ func Reverse(arr []byte) []byte {
 		res[i], res[j] = res[j], res[i]
 	}
 
+	return res
+}
+
+func SlashUnescape(str string) string {
+	res := strings.ReplaceAll(str, `\/`, "/")
+	res = strings.ReplaceAll(res, `\\`, `\`)
 	return res
 }
