@@ -93,6 +93,19 @@ func (s *LineReversalServer) openSession(sid int, addr *net.UDPAddr) *Session {
 	return session
 }
 
+func (s *LineReversalServer) closeSession(sid int) *Session {
+	s.Lock()
+	defer s.Unlock()
+
+	session, ok := s.sessions[sid]
+	if ok {
+		session.IsOpen = false
+		return session
+	}
+
+	return nil
+}
+
 func (s *LineReversalServer) handleUDP() {
 	buf := make([]byte, 1000)
 	for {
@@ -130,7 +143,10 @@ func (s *LineReversalServer) handleUDP() {
 		case lrcpmsg.AckMsg:
 			response = fmt.Sprintf("Ack - Session ID: %d, Length: %d\n", res.SessionID, res.Length)
 		case lrcpmsg.CloseMsg:
-			response = fmt.Sprintf("Close - Session ID: %d\n", res.SessionID)
+			session := s.closeSession(res.SessionID)
+			if session != nil {
+				s.sendCloseMessage(session)
+			}
 		}
 
 		log.Println(response)
