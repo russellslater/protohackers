@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/russellslater/protohackers/cmd/line-reversal/lrcpmsg"
@@ -174,13 +175,21 @@ func (s *LineReversalServer) handleData(msg lrcpmsg.DataMsg) {
 
 	if session.ReceivedPos == msg.Pos {
 		data := util.SlashUnescape(string(msg.Data))
-		log.Printf("Unescaped: %s\n", data)
+		log.Printf("Unescaped: %s, %d\n", data, len(data))
 
 		session.AppendData(data)
 		s.sendAckMessage(session)
 
-		// TODO: detect lines and pass to application layer for reversal
-		// TODO: ... then send back
+		lines, len := session.CompletedLines(session.SentPos)
+
+		if len > 0 {
+			for i, l := range lines {
+				lines[i] = string(util.Reverse([]byte(l)))
+			}
+
+			s.sendDataMessage(session, session.SentPos, lines)
+			session.SentPos += len
+		}
 	} else if session.ReceivedPos < msg.Pos {
 		s.sendAckMessage(session)
 	}
@@ -193,6 +202,12 @@ func (s *LineReversalServer) sendCloseMessage(session *Session) {
 func (s *LineReversalServer) sendAckMessage(session *Session) {
 	ack := lrcpmsg.AckMsg{SessionID: session.ID, Length: session.ReceivedPos}
 	s.sendMessage(session, ack)
+}
+
+func (s *LineReversalServer) sendDataMessage(session *Session, pos int, lines []string) {
+	data := fmt.Sprintf("%s\n", strings.Join(lines, "\n"))
+	msg := lrcpmsg.DataMsg{SessionID: session.ID, Pos: pos, Data: []byte(data)}
+	s.sendMessage(session, msg)
 }
 
 func (s *LineReversalServer) sendMessage(session *Session, msg lrcpmsg.Msg) {

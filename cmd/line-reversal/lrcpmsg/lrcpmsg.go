@@ -29,6 +29,10 @@ type DataMsg struct {
 	Data      []byte
 }
 
+func (d DataMsg) String() string {
+	return fmt.Sprintf("/data/%d/%d/%s/", d.SessionID, d.Pos, d.Data)
+}
+
 type AckMsg struct {
 	SessionID int
 	Length    int
