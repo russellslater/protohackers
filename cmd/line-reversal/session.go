@@ -36,3 +36,19 @@ func (s *Session) AppendData(data string) int {
 
 	return 0
 }
+
+func (s *Session) CompletedLines(pos int) ([]string, int) {
+	data := s.data.String()
+
+	if len(data) < pos {
+		return nil, 0
+	}
+
+	idx := strings.LastIndex(data, "\n")
+
+	if idx != -1 {
+		return strings.Split(data[pos:idx], "\n"), idx - pos + 1
+	} else {
+		return nil, 0
+	}
+}
