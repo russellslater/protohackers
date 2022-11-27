@@ -83,11 +83,7 @@ func (s *LineReversalServer) openSession(sid int, addr *net.UDPAddr) *Session {
 		return session
 	}
 
-	session = &Session{
-		ID:     sid,
-		Addr:   addr,
-		IsOpen: true,
-	}
+	session = NewSession(sid, addr)
 
 	s.sessions[sid] = session
 
@@ -180,11 +176,11 @@ func (s *LineReversalServer) handleData(msg lrcpmsg.DataMsg) {
 		data := util.SlashUnescape(string(msg.Data))
 		log.Printf("Unescaped: %s\n", data)
 
-		session.ReceivedPos += len(data)
+		session.AppendData(data)
 		s.sendAckMessage(session)
 
 		// TODO: detect lines and pass to application layer for reversal
-		// TODO: ... the send back
+		// TODO: ... then send back
 	} else if session.ReceivedPos < msg.Pos {
 		s.sendAckMessage(session)
 	}
