@@ -23,5 +23,6 @@ func Reverse(arr []byte) []byte {
 func SlashUnescape(str string) string {
 	res := strings.ReplaceAll(str, `\/`, "/")
 	res = strings.ReplaceAll(res, `\\`, `\`)
+	res = strings.ReplaceAll(res, `\n`, "\n")
 	return res
 }

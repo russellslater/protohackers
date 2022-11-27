@@ -71,6 +71,11 @@ func TestSlashUnescape(t *testing.T) {
 			`foo\\\/bar\\\\baz`,
 			`foo\/bar\\baz`,
 		},
+		{
+			"New lines",
+			`Hello\\nworld\\n`,
+			"Hello\nworld\n",
+		},
 	}
 
 	for _, tc := range tt {
