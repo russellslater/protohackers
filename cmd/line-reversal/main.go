@@ -146,7 +146,7 @@ func (s *LineReversalServer) handleUDP() {
 		case lrcpmsg.ConnectMsg:
 			session := s.openSession(res.SessionID, addr)
 			if session.IsOpen {
-				s.sendAckMessage(session)
+				s.sendAckMessage(session, 0)
 			} else {
 				s.closeSession(session.ID)
 			}
@@ -175,7 +175,7 @@ func (s *LineReversalServer) handleData(msg lrcpmsg.DataMsg) {
 		log.Printf("Unescaped: %s, %d\n", data, len(data))
 
 		session.AppendData(data)
-		s.sendAckMessage(session)
+		s.sendAckMessage(session, session.ReceivedPos)
 
 		lines, len := session.CompletedLines(session.SentPos)
 
@@ -191,7 +191,7 @@ func (s *LineReversalServer) handleData(msg lrcpmsg.DataMsg) {
 			session.SentPos += len
 		}
 	} else if session.ReceivedPos < msg.Pos {
-		s.sendAckMessage(session)
+		s.sendAckMessage(session, session.ReceivedPos)
 	}
 }
 
@@ -232,8 +232,8 @@ func (s *LineReversalServer) sendCloseMessage(session *Session) {
 	s.sendMessage(session, lrcpmsg.CloseMsg{SessionID: session.ID})
 }
 
-func (s *LineReversalServer) sendAckMessage(session *Session) {
-	ack := lrcpmsg.AckMsg{SessionID: session.ID, Length: session.ReceivedPos}
+func (s *LineReversalServer) sendAckMessage(session *Session, pos int) {
+	ack := lrcpmsg.AckMsg{SessionID: session.ID, Length: pos}
 	s.sendMessage(session, ack)
 }
 

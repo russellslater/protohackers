@@ -36,6 +36,15 @@ func TestLineReversalServer(t *testing.T) {
 				{payload: []byte("/close/12345/"), expectedResponse: []byte("/close/12345/")},
 			},
 		},
+		{
+			name: "Multiple connects",
+			requests: []request{
+				{payload: []byte("/connect/987654/"), expectedResponse: []byte("/ack/987654/0/")},
+				{payload: []byte("/connect/987654/"), expectedResponse: []byte("/ack/987654/0/")},
+				{payload: []byte(`/data/987654/0/hello/`), expectedResponse: []byte("/ack/987654/5/")},
+				{payload: []byte("/connect/987654/"), expectedResponse: []byte("/ack/987654/0/")},
+			},
+		},
 	}
 
 	for _, tc := range tt {
