@@ -7,12 +7,13 @@ import (
 )
 
 type Session struct {
-	ID          int
-	Addr        *net.UDPAddr
-	IsOpen      bool
-	ReceivedPos int
-	SentPos     int
-	data        strings.Builder
+	ID            int
+	Addr          *net.UDPAddr
+	IsOpen        bool
+	ReceivedPos   int
+	SentPos       int
+	LargestAckPos int
+	data          strings.Builder
 	sync.Mutex
 }
 
@@ -21,6 +22,16 @@ func NewSession(sid int, addr *net.UDPAddr) *Session {
 		ID:     sid,
 		Addr:   addr,
 		IsOpen: true,
+	}
+}
+
+func (s *Session) Close() {
+	s.Lock()
+	defer s.Unlock()
+
+	if s.IsOpen {
+		s.IsOpen = false
+		s.data.Reset()
 	}
 }
 

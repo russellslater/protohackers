@@ -92,7 +92,18 @@ func (s *LineReversalServer) openSession(sid int, addr *net.UDPAddr) *Session {
 }
 
 func (s *LineReversalServer) findSession(sid int) *Session {
-	return s.sessions[sid]
+	session, ok := s.sessions[sid]
+
+	if !ok {
+		return nil
+	}
+
+	if !session.IsOpen {
+		s.sendCloseMessage(session)
+		return nil
+	}
+
+	return session
 }
 
 func (s *LineReversalServer) closeSession(sid int) *Session {
@@ -101,7 +112,8 @@ func (s *LineReversalServer) closeSession(sid int) *Session {
 
 	session, ok := s.sessions[sid]
 	if ok {
-		session.IsOpen = false
+		session.Close()
+		s.sendCloseMessage(session)
 		return session
 	}
 
@@ -130,32 +142,21 @@ func (s *LineReversalServer) handleUDP() {
 			continue
 		}
 
-		var response string
-
 		switch res := result.(type) {
 		case lrcpmsg.ConnectMsg:
 			session := s.openSession(res.SessionID, addr)
 			if session.IsOpen {
 				s.sendAckMessage(session)
 			} else {
-				s.sendCloseMessage(session)
+				s.closeSession(session.ID)
 			}
 		case lrcpmsg.DataMsg:
+			log.Printf("DataMsg - Session ID: %d, Pos: %d\n", res.SessionID, res.Pos)
 			s.handleData(res)
 		case lrcpmsg.AckMsg:
-			response = fmt.Sprintf("Ack - Session ID: %d, Length: %d\n", res.SessionID, res.Length)
+			s.handleAck(res)
 		case lrcpmsg.CloseMsg:
-			session := s.closeSession(res.SessionID)
-			if session != nil {
-				s.sendCloseMessage(session)
-			}
-		}
-
-		log.Println(response)
-
-		if response != "" {
-			log.Printf("sending %d bytes over UDP to %v: %s", len(fmt.Sprintf("%v", response)), addr, response)
-			s.conn.WriteToUDP([]byte(fmt.Sprintf("%v", response)), addr)
+			s.closeSession(res.SessionID)
 		}
 	}
 }
@@ -164,10 +165,6 @@ func (s *LineReversalServer) handleData(msg lrcpmsg.DataMsg) {
 	session := s.findSession(msg.SessionID)
 	if session == nil {
 		return
-	}
-
-	if !session.IsOpen {
-		s.sendCloseMessage(session)
 	}
 
 	log.Printf("Session - ID: %d, ReceivedPos: %d\n", session.ID, session.ReceivedPos)
@@ -187,11 +184,47 @@ func (s *LineReversalServer) handleData(msg lrcpmsg.DataMsg) {
 				lines[i] = string(util.Reverse([]byte(l)))
 			}
 
+			// TODO: handle retransmission (3s)
+			// TODO: handle session expiry (60s)
+			// TODO: LRCP messages must be smaller than 1000 bytes. You might have to break up data into multiple data messages in order to fit it below this limit.
 			s.sendDataMessage(session, session.SentPos, lines)
 			session.SentPos += len
 		}
 	} else if session.ReceivedPos < msg.Pos {
 		s.sendAckMessage(session)
+	}
+}
+
+func (s *LineReversalServer) handleAck(msg lrcpmsg.AckMsg) {
+	session := s.findSession(msg.SessionID)
+	if session == nil {
+		return
+	}
+
+	log.Printf("Session - ID: %d, ReceivedPos: %d, LargestAckPos: %d\n", session.ID, session.SentPos, session.LargestAckPos)
+	log.Printf("Ack - Length: %d\n", msg.Length)
+
+	if msg.Length < session.LargestAckPos {
+		return // do nothing
+	}
+
+	if msg.Length > session.SentPos {
+		// misbehaving
+		s.closeSession(session.ID)
+	} else if msg.Length < session.SentPos {
+		lines, len := session.CompletedLines(msg.Length)
+
+		if len > 0 {
+			for i, l := range lines {
+				lines[i] = string(util.Reverse([]byte(l)))
+			}
+
+			// TODO: LRCP messages must be smaller than 1000 bytes.
+			// You might have to break up data into multiple data messages in order to fit it below this limit.
+			s.sendDataMessage(session, msg.Length, lines)
+		}
+	} else {
+		session.LargestAckPos = msg.Length
 	}
 }
 
@@ -205,6 +238,7 @@ func (s *LineReversalServer) sendAckMessage(session *Session) {
 }
 
 func (s *LineReversalServer) sendDataMessage(session *Session, pos int, lines []string) {
+	// TODO: escape slashes
 	data := fmt.Sprintf("%s\n", strings.Join(lines, "\n"))
 	msg := lrcpmsg.DataMsg{SessionID: session.ID, Pos: pos, Data: []byte(data)}
 	s.sendMessage(session, msg)
