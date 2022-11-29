@@ -20,9 +20,27 @@ func Reverse(arr []byte) []byte {
 	return res
 }
 
+func replacements() [][]string {
+	return [][]string{
+		{`\/`, "/"},
+		{`\\`, `\`},
+		{`\n`, "\n"},
+	}
+}
+
 func SlashUnescape(str string) string {
-	res := strings.ReplaceAll(str, `\/`, "/")
-	res = strings.ReplaceAll(res, `\\`, `\`)
-	res = strings.ReplaceAll(res, `\n`, "\n")
+	res := str
+	for _, r := range replacements() {
+		res = strings.ReplaceAll(res, r[0], r[1])
+	}
+	return res
+}
+
+func SlashEscape(str string) string {
+	res := str
+	rep := replacements()
+	for i := len(rep) - 1; i >= 0; i-- {
+		res = strings.ReplaceAll(res, rep[i][1], rep[i][0])
+	}
 	return res
 }

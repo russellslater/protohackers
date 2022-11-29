@@ -90,3 +90,40 @@ func TestSlashUnescape(t *testing.T) {
 		})
 	}
 }
+
+func TestSlashEscape(t *testing.T) {
+	t.Parallel()
+	tt := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			"Forward slash and backslash",
+			`foo/bar\baz`,
+			`foo\/bar\\baz`,
+		},
+		{
+			"Double slashes",
+			`foo\/bar\\baz`,
+			`foo\\\/bar\\\\baz`,
+		},
+		{
+			"New lines",
+			"Hello\nworld\n",
+			`Hello\\nworld\\n`,
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			is := is.New(t)
+
+			got := util.SlashEscape(tc.input)
+
+			is.Equal(got, tc.want)
+		})
+	}
+}

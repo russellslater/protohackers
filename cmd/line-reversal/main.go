@@ -238,8 +238,7 @@ func (s *LineReversalServer) sendAckMessage(session *Session) {
 }
 
 func (s *LineReversalServer) sendDataMessage(session *Session, pos int, lines []string) {
-	// TODO: escape slashes
-	data := fmt.Sprintf("%s\n", strings.Join(lines, "\n"))
+	data := util.SlashEscape(fmt.Sprintf("%s\n", strings.Join(lines, "\n")))
 	msg := lrcpmsg.DataMsg{SessionID: session.ID, Pos: pos, Data: []byte(data)}
 	s.sendMessage(session, msg)
 }
