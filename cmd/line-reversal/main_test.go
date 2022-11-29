@@ -1,10 +1,82 @@
 package main
 
 import (
+	"fmt"
+	"net"
 	"testing"
 
 	"github.com/matryer/is"
 )
+
+func init() {
+	s := NewLineReversalServer(5000, "")
+	go s.Start()
+}
+
+func TestLineReversalServer(t *testing.T) {
+	type request struct {
+		payload          []byte
+		expectedResponse []byte
+	}
+
+	tt := []struct {
+		name     string
+		requests []request
+	}{
+		{
+			name: "Protohackers example scenario",
+			requests: []request{
+				{payload: []byte("/connect/12345/"), expectedResponse: []byte("/ack/12345/0/")},
+				{payload: []byte("/data/12345/0/hello\\n/"), expectedResponse: []byte("/ack/12345/6/")},
+				{payload: nil, expectedResponse: []byte("/data/12345/0/olleh\n/")},
+				{payload: []byte("/ack/12345/6/"), expectedResponse: nil},
+				{payload: []byte("/data/12345/6/Hello, world!\\n/"), expectedResponse: []byte("/ack/12345/20/")},
+				{payload: nil, expectedResponse: []byte("/data/12345/6/!dlrow ,olleH\n/")},
+				{payload: []byte("/ack/12345/20/"), expectedResponse: nil},
+				{payload: []byte("/close/12345/"), expectedResponse: []byte("/close/12345/")},
+			},
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			is := is.New(t)
+
+			addr, _ := net.ResolveUDPAddr("udp", ":5000")
+			conn, err := net.DialUDP("udp", nil, addr)
+
+			if err != nil {
+				t.Errorf("could not connect to server: %v", err)
+			}
+
+			defer conn.Close()
+
+			for _, request := range tc.requests {
+				if request.payload != nil {
+					if _, err := conn.Write(request.payload); err != nil {
+						t.Errorf("could not write payload to server: %v", err)
+					}
+				}
+
+				// response not expected
+				if request.expectedResponse == nil {
+					continue
+				}
+
+				fmt.Println(request)
+
+				got := make([]byte, 1000)
+				if n, err := conn.Read(got); err == nil {
+					is.Equal(string(got[:n]), string(request.expectedResponse)) // response did not match
+				} else {
+					t.Errorf("could not read from connection: %v", err)
+				}
+			}
+		})
+	}
+}
 
 func TestSessionAppendData(t *testing.T) {
 	t.Parallel()
