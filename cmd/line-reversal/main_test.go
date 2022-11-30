@@ -2,8 +2,11 @@ package main
 
 import (
 	"fmt"
+	"math"
+	"math/rand"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/matryer/is"
 )
@@ -13,7 +16,37 @@ func init() {
 	go s.Start()
 }
 
+func waitForServerStart(t *testing.T) {
+	isStarted := false
+	rand.Seed(time.Now().UnixNano())
+
+	addr, _ := net.ResolveUDPAddr("udp", ":5000")
+
+	for i := 0; i < 10; i++ {
+		conn, _ := net.DialUDP("udp", nil, addr)
+		conn.Write([]byte("/connect/0/"))
+
+		_, err := conn.Read(make([]byte, 1000))
+		if err == nil {
+			isStarted = true
+			break
+		}
+
+		conn.Close()
+
+		t := math.Pow(2, float64(i))*1000 + (rand.Float64() * 1000)
+		backoff := math.Min(t, 10000)
+		time.Sleep(time.Millisecond * time.Duration(backoff))
+	}
+
+	if !isStarted {
+		t.Error("could not connect to server")
+	}
+}
+
 func TestLineReversalServer(t *testing.T) {
+	waitForServerStart(t)
+
 	type request struct {
 		payload          []byte
 		expectedResponse []byte
