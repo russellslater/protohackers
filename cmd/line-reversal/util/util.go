@@ -51,13 +51,12 @@ func Chunks(str string, maxSize int) []string {
 		return nil
 	}
 
-	chunks := []string{}
-	t := int(math.Ceil(float64(len(str)) / float64(maxSize)))
-	for i := 0; i < t-1; i++ {
+	chunks := make([]string, int(math.Ceil(float64(len(str))/float64(maxSize))))
+	for i := 0; i < len(chunks)-1; i++ {
 		idx := i * maxSize
-		chunks = append(chunks, str[idx:idx+maxSize])
+		chunks[i] = str[idx : idx+maxSize]
 	}
-	chunks = append(chunks, str[(len(chunks))*maxSize:])
+	chunks[len(chunks)-1] = str[(len(chunks)-1)*maxSize:]
 
 	return chunks
 }

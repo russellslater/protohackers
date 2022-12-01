@@ -180,3 +180,12 @@ func TestChunks(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkChunks(b *testing.B) {
+	input := `lcvpWuQrNckK7rMaeGz9BcLRZNH4agyoHdFIJAsez0LNNb9SU6rxYnQnPwbW8uXpXPhp1vtolgDBr8vpz3iXQ2g0lbDYmwLQv7dd\\n`
+	maxSize := 50
+
+	for i := 0; i < b.N; i++ {
+		util.Chunks(input, maxSize)
+	}
+}
