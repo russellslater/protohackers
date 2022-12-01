@@ -1,6 +1,7 @@
 package util_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/matryer/is"
@@ -124,6 +125,58 @@ func TestSlashEscape(t *testing.T) {
 			got := util.SlashEscape(tc.input)
 
 			is.Equal(got, tc.want)
+		})
+	}
+}
+
+func TestChunks(t *testing.T) {
+	t.Parallel()
+	tt := []struct {
+		name    string
+		input   string
+		maxSize int
+		want    []string
+	}{
+		{
+			"Empty string",
+			"",
+			0,
+			nil,
+		},
+		{
+			"Max size of zero",
+			"Hello, world!",
+			0,
+			nil,
+		},
+		{
+			"Hello, world",
+			"Hello, world!",
+			100,
+			[]string{"Hello, world!"},
+		},
+		{
+			"Split in two",
+			"Hello, world!",
+			7,
+			[]string{"Hello, ", "world!"},
+		},
+		{
+			"Split in three",
+			`lcvpWuQrNckK7rMaeGz9BcLRZNH4agyoHdFIJAsez0LNNb9SU6rxYnQnPwbW8uXpXPhp1vtolgDBr8vpz3iXQ2g0lbDYmwLQv7dd\\n`,
+			50,
+			[]string{"lcvpWuQrNckK7rMaeGz9BcLRZNH4agyoHdFIJAsez0LNNb9SU6", "rxYnQnPwbW8uXpXPhp1vtolgDBr8vpz3iXQ2g0lbDYmwLQv7dd", `\\n`},
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			is := is.New(t)
+
+			got := util.Chunks(tc.input, tc.maxSize)
+			is.True(reflect.DeepEqual(got, tc.want)) // arrays do not match
 		})
 	}
 }

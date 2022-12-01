@@ -1,6 +1,7 @@
 package util
 
 import (
+	"math"
 	"strings"
 )
 
@@ -43,4 +44,20 @@ func SlashEscape(str string) string {
 		res = strings.ReplaceAll(res, rep[i][1], rep[i][0])
 	}
 	return res
+}
+
+func Chunks(str string, maxSize int) []string {
+	if len(str) == 0 || maxSize == 0 {
+		return nil
+	}
+
+	chunks := []string{}
+	t := int(math.Ceil(float64(len(str)) / float64(maxSize)))
+	for i := 0; i < t-1; i++ {
+		idx := i * maxSize
+		chunks = append(chunks, str[idx:idx+maxSize])
+	}
+	chunks = append(chunks, str[(len(chunks))*maxSize:])
+
+	return chunks
 }
